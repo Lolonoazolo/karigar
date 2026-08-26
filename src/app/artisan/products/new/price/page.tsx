@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProductDraft } from '@/context/ProductDraftContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { ProgressIndicator } from '@/components/ui/ProgressIndicator';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -13,6 +14,7 @@ import { recommendPrice } from '@/lib/ai/pricing';
 export default function AIPriceRecommendationPage() {
   const router = useRouter();
   const { draft, updateDraft } = useProductDraft();
+  const { t, language } = useLanguage();
 
   const [makingCost, setMakingCost] = useState<number>(draft.cost || 700);
   const [desiredProfit, setDesiredProfit] = useState<number>(draft.desiredProfit || 250);
@@ -28,7 +30,7 @@ export default function AIPriceRecommendationPage() {
 
   const handleAiPriceRefresh = async () => {
     setIsAiLoading(true);
-    const result = await recommendPrice(makingCost, desiredProfit, draft.name);
+    const result = await recommendPrice(makingCost, desiredProfit, draft.name, language);
     setRecommendedPrice(result.recommendedPrice);
     setIsAiLoading(false);
   };
@@ -48,8 +50,8 @@ export default function AIPriceRecommendationPage() {
       {/* Step Header */}
       <div className="space-y-2">
         <div className="flex justify-between items-center text-xs font-label font-semibold text-[#6b6358]">
-          <span>Step 3 of 4</span>
-          <span>AI Pricing</span>
+          <span>{t('addPrice.step')}</span>
+          <span>{t('addPrice.title')}</span>
         </div>
         <ProgressIndicator currentStep={3} totalSteps={4} />
       </div>
@@ -57,17 +59,17 @@ export default function AIPriceRecommendationPage() {
       {/* Heading */}
       <div className="text-center space-y-1.5">
         <h2 className="font-headline text-2xl font-bold text-[#2e3230]">
-          Apne product ki keemat tay karein
+          {t('addPrice.heading')}
         </h2>
         <p className="font-label text-sm text-[#4a4e4a]">
-          AI will help you set the best price based on your inputs.
+          {t('addPrice.subheading')}
         </p>
       </div>
 
       {/* Input Fields */}
       <div className="bg-white rounded-2xl p-5 soft-shadow border border-[#c4c8bc]/30 space-y-4">
         <Input
-          label="Product banane mein kitna kharcha aaya? (Making Cost)"
+          label={t('addPrice.makingCostLabel')}
           type="number"
           prefixText="₹"
           placeholder="700"
@@ -77,7 +79,7 @@ export default function AIPriceRecommendationPage() {
         />
 
         <Input
-          label="Aap kitna profit chahte/chahti hain? (Desired Profit)"
+          label={t('addPrice.desiredProfitLabel')}
           type="number"
           prefixText="₹"
           placeholder="250"
@@ -93,7 +95,7 @@ export default function AIPriceRecommendationPage() {
           className="w-full bg-[#f0ece4] hover:bg-[#eae6de] text-[#4a7c59] rounded-xl py-2.5 px-4 font-label font-bold text-xs flex items-center justify-center gap-1.5 transition-colors border border-[#c4c8bc]/40"
         >
           <Sparkles className="w-4 h-4 text-[#4a7c59]" />
-          <span>{isAiLoading ? 'AI calculate kar raha hai...' : 'AI se Dobara Price Puchein'}</span>
+          <span>{isAiLoading ? t('addPrice.recalculating') : t('addPrice.recalculateBtn')}</span>
         </button>
       </div>
 
@@ -110,9 +112,9 @@ export default function AIPriceRecommendationPage() {
           onClick={handleConfirmPrice}
           fullWidth
           size="lg"
-          icon={<ArrowRight className="w-5 h-5" />}
+          icon={<ArrowRight className="w-5 h-5 rtl-flip" />}
         >
-          Price Confirm Karein & SKU Set Karein
+          {t('addPrice.confirmBtn')}
         </Button>
       </div>
     </div>

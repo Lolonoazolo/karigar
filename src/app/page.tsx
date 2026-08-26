@@ -3,18 +3,26 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useArtisan } from '@/context/ArtisanContext';
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function Home() {
   const router = useRouter();
   const { user } = useArtisan();
+  const { isHydrated } = useLanguage();
 
   useEffect(() => {
-    if (user) {
+    if (!isHydrated) return;
+
+    const savedLanguage = typeof window !== 'undefined' ? localStorage.getItem('karigar-language') : null;
+
+    if (!savedLanguage) {
+      router.replace('/onboarding/language');
+    } else if (user) {
       router.replace('/artisan/products');
     } else {
-      router.replace('/onboarding/language');
+      router.replace('/onboarding/profile');
     }
-  }, [user, router]);
+  }, [user, router, isHydrated]);
 
   return (
     <div className="min-h-screen bg-[#faf6f0] flex flex-col items-center justify-center p-6 text-center">

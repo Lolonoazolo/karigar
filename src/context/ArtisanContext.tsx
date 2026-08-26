@@ -1,8 +1,10 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { ArtisanUser, Product, ProductCategory } from '@/types';
+import { ArtisanUser, Product } from '@/types';
 import { INITIAL_MOCK_PRODUCTS } from '@/data/mockProducts';
+import { useLanguage } from '@/context/LanguageContext';
+import { LanguageId } from '@/lib/i18n/languages';
 
 type ToastState = {
   message: string;
@@ -31,8 +33,8 @@ const ArtisanContext = createContext<ArtisanContextType | undefined>(undefined);
 const STORAGE_KEY = 'karigarai_artisan_data_v1';
 
 export const ArtisanProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { language, setLanguage, t } = useLanguage();
   const [user, setUser] = useState<ArtisanUser | null>(null);
-  const [selectedLang, setSelectedLang] = useState<string>('Hindi');
   const [products, setProducts] = useState<Product[]>([]);
   const [currentFilter, setCurrentFilter] = useState<'all' | 'published' | 'draft'>('all');
   const [toast, setToast] = useState<ToastState>({ message: '', visible: false });
@@ -44,14 +46,12 @@ export const ArtisanProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.user) setUser(parsed.user);
-        if (parsed.selectedLang) setSelectedLang(parsed.selectedLang);
         if (parsed.products && Array.isArray(parsed.products) && parsed.products.length > 0) {
           setProducts(parsed.products);
         } else {
           setProducts(INITIAL_MOCK_PRODUCTS);
         }
       } else {
-        // Initial setup
         setProducts(INITIAL_MOCK_PRODUCTS);
       }
     } catch (e) {
@@ -68,7 +68,7 @@ export const ArtisanProvider: React.FC<{ children: React.ReactNode }> = ({ child
           STORAGE_KEY,
           JSON.stringify({
             user,
-            selectedLang,
+            selectedLang: language,
             products,
           })
         );
@@ -76,7 +76,7 @@ export const ArtisanProvider: React.FC<{ children: React.ReactNode }> = ({ child
         console.error('Failed to save artisan state to storage', e);
       }
     }
-  }, [user, selectedLang, products]);
+  }, [user, language, products]);
 
   const showToast = (message: string) => {
     setToast({ message, visible: true });
@@ -87,22 +87,22 @@ export const ArtisanProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const login = (newUser: ArtisanUser) => {
     setUser(newUser);
-    showToast(`Swagat hai, ${newUser.name}!`);
+    showToast(t('onboarding.welcomeToast', { name: newUser.name }));
   };
 
   const demoLogin = () => {
     const demoUser: ArtisanUser = {
       mobile: '98765 43210',
-      name: 'Demo Karigar',
+      name: t('common.karigar'),
       shop: 'Karigar Crafts',
-      lang: selectedLang || 'Hindi',
+      lang: language,
       bio: 'Main pichhle 10 saal se haath se traditional craft banata hoon.',
     };
     setUser(demoUser);
     if (products.length === 0) {
       setProducts(INITIAL_MOCK_PRODUCTS);
     }
-    showToast('Demo Artisan login ho gaya!');
+    showToast(t('onboarding.demoToast'));
   };
 
   const logout = () => {
@@ -117,28 +117,28 @@ export const ArtisanProvider: React.FC<{ children: React.ReactNode }> = ({ child
       createdAt: Date.now(),
     };
     setProducts((prev) => [newProduct, ...prev]);
-    showToast('Product successfully add ho gaya!');
+    showToast(t('addSku.saveSuccessToast'));
     return newProduct;
   };
 
   const deleteProduct = (id: string) => {
     setProducts((prev) => prev.filter((p) => p.id !== id));
-    showToast('Product delete ho gaya!');
+    showToast(t('productCard.deleteToast'));
   };
 
   const updateProduct = (id: string, updates: Partial<Product>) => {
     setProducts((prev) =>
       prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
     );
-    showToast('Product update ho gaya!');
+    showToast(t('productCard.shareToast'));
   };
 
   return (
     <ArtisanContext.Provider
       value={{
         user,
-        selectedLang,
-        setSelectedLang,
+        selectedLang: language,
+        setSelectedLang: (lang: string) => setLanguage(lang as LanguageId),
         products,
         login,
         demoLogin,

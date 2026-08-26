@@ -3,6 +3,9 @@ export type Language = {
   nameNative: string;
   nameEnglish: string;
   available: boolean;
+  code?: string;
+  locale?: string;
+  dir?: 'ltr' | 'rtl';
 };
 
 export type ArtisanUser = {

@@ -5,6 +5,7 @@ import { Product } from '@/types';
 import { Badge } from '@/components/ui/Badge';
 import { Edit2, Trash2, Share2, Package, Tag } from 'lucide-react';
 import { useArtisan } from '@/context/ArtisanContext';
+import { useLanguage } from '@/context/LanguageContext';
 
 type ProductCardProps = {
   product: Product;
@@ -20,6 +21,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onShare,
 }) => {
   const { deleteProduct, showToast } = useArtisan();
+  const { t, formatCurr, formatNum } = useLanguage();
 
   const getCategoryEmoji = (category: string) => {
     switch (category) {
@@ -38,8 +40,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     }
   };
 
+  const categoryLabel = t(`categories.${product.category}` as any) || product.category;
+
   const handleDelete = () => {
-    if (confirm(`Kya aap "${product.name}" ko delete karna chahte hain?`)) {
+    if (confirm(t('productCard.deleteConfirm', { name: product.name }))) {
       if (onDelete) {
         onDelete(product.id);
       } else {
@@ -52,7 +56,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     if (onShare) {
       onShare(product);
     } else {
-      showToast('Product link copy ho gaya!');
+      showToast(t('productCard.shareToast'));
     }
   };
 
@@ -67,15 +71,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#c8e8d0]/40 to-[#f8e0a8]/40">
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#c8e8d0]/40 to-[#f8e0a8]/40 p-2 text-center">
             <span className="text-5xl mb-1">{getCategoryEmoji(product.category)}</span>
-            <span className="font-label text-xs text-[#6b6358] font-semibold">{product.category}</span>
+            <span className="font-label text-xs text-[#6b6358] font-semibold">{categoryLabel}</span>
           </div>
         )}
 
         <div className="absolute top-3 right-3">
           <Badge variant={product.status === 'published' ? 'published' : 'draft'}>
-            {product.status === 'published' ? 'Published' : 'Draft'}
+            {product.status === 'published' ? t('productCard.publishedBadge') : t('productCard.draftBadge')}
           </Badge>
         </div>
       </div>
@@ -88,7 +92,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               {product.name}
             </h3>
             <span className="font-headline font-extrabold text-[#4a7c59] text-base shrink-0">
-              ₹{product.price.toLocaleString('en-IN')}
+              {formatCurr(product.price)}
             </span>
           </div>
 
@@ -109,12 +113,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         <div className="pt-3 border-t border-[#c4c8bc]/20 space-y-1.5">
           <div className="flex items-center justify-between text-xs text-[#6b6358] font-label">
             <div className="flex items-center gap-1.5">
-              <Package className="w-3.5 h-3.5 text-[#4a7c59]" />
-              <span>Stock: <strong className="text-[#2e3230]">{product.stock} units</strong></span>
+              <Package className="w-3.5 h-3.5 text-[#4a7c59] shrink-0" />
+              <span>{t('productCard.stockUnits', { stock: formatNum(product.stock) })}</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <Tag className="w-3.5 h-3.5 text-[#705c30]" />
-              <span>SKU: <strong className="text-[#2e3230]">{product.sku}</strong></span>
+              <Tag className="w-3.5 h-3.5 text-[#705c30] shrink-0" />
+              <span>{t('productCard.skuLabel', { sku: product.sku })}</span>
             </div>
           </div>
         </div>
@@ -123,22 +127,22 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       {/* Action Footer */}
       <div className="border-t border-[#c4c8bc]/20 grid grid-cols-3 bg-[#faf6f0]/50 text-xs font-label">
         <button
-          onClick={() => onEdit ? onEdit(product) : showToast('Edit coming soon!')}
+          onClick={() => onEdit ? onEdit(product) : showToast(t('productCard.editSoonToast'))}
           className="py-2.5 font-semibold text-[#4a4e4a] hover:bg-[#f0ece4] transition-colors flex items-center justify-center gap-1 border-r border-[#c4c8bc]/20 active:bg-[#eae6de]"
         >
-          <Edit2 className="w-3.5 h-3.5" /> Edit
+          <Edit2 className="w-3.5 h-3.5" /> {t('productCard.editBtn')}
         </button>
         <button
           onClick={handleShare}
           className="py-2.5 font-semibold text-[#4a7c59] hover:bg-[#f0ece4] transition-colors flex items-center justify-center gap-1 border-r border-[#c4c8bc]/20 active:bg-[#eae6de]"
         >
-          <Share2 className="w-3.5 h-3.5" /> Share
+          <Share2 className="w-3.5 h-3.5" /> {t('productCard.shareBtn')}
         </button>
         <button
           onClick={handleDelete}
           className="py-2.5 font-semibold text-[#b83230] hover:bg-[#ffdad8]/40 transition-colors flex items-center justify-center gap-1 active:bg-[#ffdad8]"
         >
-          <Trash2 className="w-3.5 h-3.5" /> Delete
+          <Trash2 className="w-3.5 h-3.5" /> {t('productCard.deleteBtn')}
         </button>
       </div>
     </div>

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProductDraft } from '@/context/ProductDraftContext';
 import { useArtisan } from '@/context/ArtisanContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { ProgressIndicator } from '@/components/ui/ProgressIndicator';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -15,6 +16,7 @@ export default function SKUAndStockPage() {
   const router = useRouter();
   const { draft, updateDraft, setLastSavedProduct, resetDraft } = useProductDraft();
   const { addProduct, showToast } = useArtisan();
+  const { t, formatCurr } = useLanguage();
 
   const [sku] = useState<string>(draft.sku || `KD-00${Math.floor(Math.random() * 90 + 10)}`);
   const [productName, setProductName] = useState<string>(draft.name || 'Handcrafted Cotton Dupatta');
@@ -24,8 +26,8 @@ export default function SKUAndStockPage() {
 
   const handleSaveProduct = () => {
     if (stock < 0 || isNaN(stock)) {
-      setError('Kripya valid stock quantity daalein (e.g. 24).');
-      showToast('Stock quantity likhein!');
+      setError(t('addSku.stockError'));
+      showToast(t('addSku.stockToast'));
       return;
     }
 
@@ -54,8 +56,8 @@ export default function SKUAndStockPage() {
       {/* Progress */}
       <div className="space-y-2">
         <div className="flex justify-between items-center text-xs font-label font-semibold text-[#6b6358]">
-          <span>Step 4 of 4</span>
-          <span>SKU & Stock</span>
+          <span>{t('addSku.step')}</span>
+          <span>{t('addSku.title')}</span>
         </div>
         <ProgressIndicator currentStep={4} totalSteps={4} />
       </div>
@@ -63,10 +65,10 @@ export default function SKUAndStockPage() {
       {/* Heading */}
       <div className="space-y-1.5">
         <h2 className="font-headline text-2xl font-bold text-[#2e3230]">
-          Product ka SKU banayein
+          {t('addSku.heading')}
         </h2>
         <p className="font-label text-sm text-[#4a4e4a] leading-relaxed">
-          SKU aapke product ka unique number hai. Isse aap apne products ko aasani se track kar sakte hain.
+          {t('addSku.subheading')}
         </p>
       </div>
 
@@ -75,7 +77,7 @@ export default function SKUAndStockPage() {
         {/* SKU Auto-generated */}
         <div className="space-y-1.5">
           <label className="font-label text-xs font-semibold text-[#6b6358]">
-            SKU (Auto-generated)
+            {t('addSku.skuAutoLabel')}
           </label>
           <div className="bg-[#f5f1ea] px-4 py-3 rounded-xl border border-[#c4c8bc]/50 flex justify-between items-center">
             <span className="font-body text-[#2e3230] font-bold tracking-wide text-base">
@@ -88,7 +90,7 @@ export default function SKUAndStockPage() {
         {/* Category Selector */}
         <div className="space-y-1.5">
           <label className="font-label text-xs font-semibold text-[#6b6358]">
-            Category
+            {t('addSku.categoryLabel')}
           </label>
           <div className="relative">
             <select
@@ -98,7 +100,7 @@ export default function SKUAndStockPage() {
             >
               {PRODUCT_CATEGORIES.map((cat) => (
                 <option key={cat.id} value={cat.id}>
-                  {cat.label}
+                  {t(`categories.${cat.id}` as any) || cat.label}
                 </option>
               ))}
             </select>
@@ -108,7 +110,7 @@ export default function SKUAndStockPage() {
 
         {/* Product Name */}
         <Input
-          label="Product Name"
+          label={t('addSku.nameLabel')}
           type="text"
           value={productName}
           onChange={(e) => setProductName(e.target.value)}
@@ -119,23 +121,23 @@ export default function SKUAndStockPage() {
         {/* Price Display */}
         <div className="space-y-1.5">
           <label className="font-label text-xs font-semibold text-[#6b6358]">
-            Final Confirmed Price
+            {t('addSku.priceLabel')}
           </label>
           <div className="bg-[#f5f1ea] px-4 py-3 rounded-xl border border-[#c4c8bc]/50 flex justify-between items-center font-bold text-[#4a7c59]">
-            <span>₹{(draft.price || 1099).toLocaleString('en-IN')}</span>
+            <span>{formatCurr(draft.price || 1099)}</span>
             <Tag className="w-4 h-4 text-[#74796e]" />
           </div>
         </div>
 
         {/* Stock Quantity */}
         <Input
-          label="Stock Quantity"
+          label={t('addSku.stockLabel')}
           type="number"
-          placeholder="e.g. 50"
+          placeholder={t('addSku.stockPlaceholder')}
           value={stock || ''}
           onChange={(e) => setStock(parseInt(e.target.value) || 0)}
           leftIcon={<Package className="w-4 h-4 text-[#74796e]" />}
-          helperText="Kitne piece abhi bechne ke liye taiyaar hain?"
+          helperText={t('addSku.stockHelper')}
           error={error}
           required
         />
@@ -154,9 +156,9 @@ export default function SKUAndStockPage() {
           onClick={handleSaveProduct}
           fullWidth
           size="lg"
-          icon={<ArrowRight className="w-5 h-5" />}
+          icon={<ArrowRight className="w-5 h-5 rtl-flip" />}
         >
-          Save Product
+          {t('addSku.saveBtn')}
         </Button>
       </div>
     </div>

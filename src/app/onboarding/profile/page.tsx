@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MobilePage } from '@/components/layout/MobilePage';
 import { useArtisan } from '@/context/ArtisanContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Toast } from '@/components/ui/Toast';
@@ -12,7 +13,8 @@ import { ArrowLeft, ArrowRight, User, Store, Lock, Sparkles } from 'lucide-react
 
 export default function ProfileSetupPage() {
   const router = useRouter();
-  const { login, demoLogin, toast, showToast, selectedLang } = useArtisan();
+  const { login, demoLogin, toast, showToast } = useArtisan();
+  const { t, language } = useLanguage();
 
   const [mobile, setMobile] = useState('');
   const [name, setName] = useState('');
@@ -24,17 +26,17 @@ export default function ProfileSetupPage() {
   const validate = () => {
     const errs: { [key: string]: string } = {};
     if (!mobile.trim()) {
-      errs.mobile = 'Kripya apna mobile number enter karein.';
+      errs.mobile = t('onboarding.errMobileRequired');
     } else if (mobile.replace(/\D/g, '').length < 10) {
-      errs.mobile = 'Mobile number 10 digits ka hona chahiye.';
+      errs.mobile = t('onboarding.errMobile10');
     }
 
     if (!name.trim()) {
-      errs.name = 'Kripya apna naam enter karein.';
+      errs.name = t('onboarding.errNameRequired');
     }
 
     if (!shop.trim()) {
-      errs.shop = 'Kripya apni dukaan ya business ka naam enter karein.';
+      errs.shop = t('onboarding.errShopRequired');
     }
 
     setErrors(errs);
@@ -44,7 +46,7 @@ export default function ProfileSetupPage() {
   const handleProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) {
-      showToast('Kripya sabhi zaroori jaankari bharein.');
+      showToast(t('onboarding.errFillAll'));
       return;
     }
 
@@ -52,7 +54,7 @@ export default function ProfileSetupPage() {
       mobile: mobile.trim(),
       name: name.trim(),
       shop: shop.trim(),
-      lang: selectedLang || 'Hindi',
+      lang: language,
       bio: bio.trim(),
     });
 
@@ -73,12 +75,12 @@ export default function ProfileSetupPage() {
         <button
           onClick={() => router.push('/onboarding/language')}
           className="p-2 -ml-2 rounded-full hover:bg-[#f0ece4] transition-colors text-[#2e3230]"
-          aria-label="Back"
+          aria-label={t('accessibility.back')}
         >
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="w-5 h-5 rtl-flip" />
         </button>
         <span className="font-headline font-bold text-[#4a7c59] text-base">
-          KarigarAI Profile Setup
+          {t('onboarding.profileTitle')}
         </span>
         <div className="w-6" />
       </header>
@@ -90,8 +92,12 @@ export default function ProfileSetupPage() {
           <div className="absolute bottom-3 left-4 flex items-center gap-2 relative z-10">
             <span className="text-3xl">🏺</span>
             <div>
-              <h2 className="font-headline font-bold text-xl text-[#2e3230]">Swagat hai 👋</h2>
-              <p className="font-label text-xs text-[#4a4e4a]">Apne account ki details bharein</p>
+              <h2 className="font-headline font-bold text-xl text-[#2e3230]">
+                {t('onboarding.welcomeTitle')}
+              </h2>
+              <p className="font-label text-xs text-[#4a4e4a]">
+                {t('onboarding.welcomeSub')}
+              </p>
             </div>
           </div>
         </div>
@@ -99,9 +105,9 @@ export default function ProfileSetupPage() {
         {/* Profile Form */}
         <form onSubmit={handleProfileSubmit} className="space-y-4 bg-white p-5 rounded-2xl soft-shadow border border-[#c4c8bc]/30">
           <Input
-            label="Mobile Number"
+            label={t('onboarding.mobileLabel')}
             type="tel"
-            placeholder="98765 43210"
+            placeholder={t('onboarding.mobilePlaceholder')}
             prefixText="🇮🇳 +91"
             value={mobile}
             onChange={(e) => setMobile(e.target.value)}
@@ -110,9 +116,9 @@ export default function ProfileSetupPage() {
           />
 
           <Input
-            label="Name"
+            label={t('onboarding.nameLabel')}
             type="text"
-            placeholder="Aapka naam"
+            placeholder={t('onboarding.namePlaceholder')}
             leftIcon={<User className="w-5 h-5 text-[#74796e]" />}
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -121,9 +127,9 @@ export default function ProfileSetupPage() {
           />
 
           <Input
-            label="Shop / Business Name"
+            label={t('onboarding.shopLabel')}
             type="text"
-            placeholder="Dukaan ka naam"
+            placeholder={t('onboarding.shopPlaceholder')}
             leftIcon={<Store className="w-5 h-5 text-[#74796e]" />}
             value={shop}
             onChange={(e) => setShop(e.target.value)}
@@ -135,16 +141,16 @@ export default function ProfileSetupPage() {
           <div className="pt-4 border-t border-[#f0ece4] space-y-3">
             <div className="text-center">
               <h3 className="font-headline font-bold text-lg text-[#2e3230]">
-                Apne baare mein batayein
+                {t('onboarding.tellAboutTitle')}
               </h3>
               <p className="font-label text-xs text-[#6b6358]">
-                Aap bolkar apni kahani bata sakti hain.
+                {t('onboarding.tellAboutSub')}
               </p>
             </div>
 
             <VoiceRecorder
               onTranscriptComplete={(text) => setBio(text)}
-              promptText="Apna naam, kitne saal se ye kaam kar rahe hain aur apne craft ke baare mein batayein."
+              promptText={t('addStory.voicePrompt')}
             />
 
             {/* Alternative text bio button */}
@@ -155,18 +161,18 @@ export default function ProfileSetupPage() {
                   onClick={() => setShowTextInput(true)}
                   className="font-label text-xs font-semibold text-[#6b6358] hover:text-[#4a7c59] underline underline-offset-4"
                 >
-                  Nahi, likhna chahti hu
+                  {t('onboarding.writeInstead')}
                 </button>
               ) : (
                 <div className="space-y-2 text-left">
                   <label className="block font-label text-xs font-semibold text-[#4a4e4a]">
-                    Apni kahani likhein
+                    {t('onboarding.writeBioLabel')}
                   </label>
                   <textarea
                     value={bio}
                     onChange={(e) => setBio(e.target.value)}
                     rows={3}
-                    placeholder="Apne craft aur अनुभव ke baare mein likho..."
+                    placeholder={t('onboarding.writeBioPlaceholder')}
                     className="w-full bg-[#f5f1ea] border border-[#c4c8bc]/60 rounded-xl p-3 text-sm text-[#2e3230] focus:ring-2 focus:ring-[#4a7c59] focus:outline-none font-body resize-none"
                   />
                 </div>
@@ -180,9 +186,9 @@ export default function ProfileSetupPage() {
               type="submit"
               fullWidth
               size="lg"
-              icon={<ArrowRight className="w-5 h-5" />}
+              icon={<ArrowRight className="w-5 h-5 rtl-flip" />}
             >
-              Profile Setup karein
+              {t('onboarding.submitProfile')}
             </Button>
 
             <Button
@@ -194,7 +200,7 @@ export default function ProfileSetupPage() {
               icon={<Sparkles className="w-4 h-4 text-[#4a7c59]" />}
               iconPosition="left"
             >
-              Demo Artisan ke roop mein dekhein
+              {t('onboarding.demoLoginBtn')}
             </Button>
           </div>
         </form>
@@ -203,7 +209,7 @@ export default function ProfileSetupPage() {
         <div className="text-center pt-2 pb-4">
           <p className="font-label text-xs text-[#6b6358] flex items-center justify-center gap-1.5">
             <Lock className="w-3.5 h-3.5 text-[#4a7c59]" />
-            <span>Aapki jaankari surakshit hai</span>
+            <span>{t('onboarding.securityNote')}</span>
           </p>
         </div>
       </main>

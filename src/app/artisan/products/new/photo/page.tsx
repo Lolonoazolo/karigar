@@ -3,6 +3,7 @@
 import React, { useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProductDraft } from '@/context/ProductDraftContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { ProgressIndicator } from '@/components/ui/ProgressIndicator';
 import { Button } from '@/components/ui/Button';
 import { Camera, Image as ImageIcon, ArrowRight, Box } from 'lucide-react';
@@ -12,6 +13,7 @@ export default function ProductPhotoPage() {
   const router = useRouter();
   const { draft, updateDraft } = useProductDraft();
   const { showToast } = useArtisan();
+  const { t } = useLanguage();
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -24,7 +26,7 @@ export default function ProductPhotoPage() {
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
       updateDraft({ photo: dataUrl, enhancedPhoto: dataUrl });
-      showToast('Photo upload ho gayi!');
+      showToast(t('addPhoto.photoUploaded'));
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -32,7 +34,6 @@ export default function ProductPhotoPage() {
 
   const handleNext = () => {
     if (!draft.photo) {
-      // If user hasn't selected a photo, provide a realistic sample craft photo as fallback
       const samplePhoto =
         'https://images.unsplash.com/photo-1610701596007-11502861dcfa?q=80&w=800&auto=format&fit=crop';
       updateDraft({ photo: samplePhoto, enhancedPhoto: samplePhoto });
@@ -45,8 +46,8 @@ export default function ProductPhotoPage() {
       {/* Progress */}
       <div className="space-y-2">
         <div className="flex justify-between items-center text-xs font-label font-semibold text-[#6b6358]">
-          <span>Step 1 of 4</span>
-          <span>Product Photo</span>
+          <span>{t('addPhoto.step')}</span>
+          <span>{t('addPhoto.title')}</span>
         </div>
         <ProgressIndicator currentStep={1} totalSteps={4} />
       </div>
@@ -54,10 +55,10 @@ export default function ProductPhotoPage() {
       {/* Heading */}
       <div className="text-center space-y-1.5">
         <h2 className="font-headline text-2xl font-bold text-[#2e3230]">
-          Apne product ki photo lein
+          {t('addPhoto.heading')}
         </h2>
         <p className="font-label text-sm text-[#4a4e4a]">
-          Photo acchi na bhi ho, AI use better bana dega.
+          {t('addPhoto.subheading')}
         </p>
       </div>
 
@@ -84,10 +85,10 @@ export default function ProductPhotoPage() {
               <Box className="w-8 h-8" />
             </div>
             <p className="font-label text-sm font-semibold text-[#4a4e4a]">
-              Product ko center mein rakhein
+              {t('addPhoto.centerNotice')}
             </p>
             <span className="font-label text-xs text-[#6b6358] bg-white px-3 py-1 rounded-full border border-[#c4c8bc]/40">
-              Tap to capture
+              {t('addPhoto.tapToCapture')}
             </span>
           </div>
         )}
@@ -121,7 +122,7 @@ export default function ProductPhotoPage() {
             <Camera className="w-5 h-5 text-white" />
           </div>
           <span className="font-label font-bold text-sm text-center leading-tight">
-            Photo Click<br />Karein
+            {t('addPhoto.clickPhoto')}
           </span>
         </button>
 
@@ -134,7 +135,7 @@ export default function ProductPhotoPage() {
             <ImageIcon className="w-5 h-5 text-[#4a7c59]" />
           </div>
           <span className="font-label font-bold text-sm text-center leading-tight">
-            Gallery Se<br />Chunein
+            {t('addPhoto.fromGallery')}
           </span>
         </button>
       </div>
@@ -146,9 +147,9 @@ export default function ProductPhotoPage() {
           variant="tertiary"
           fullWidth
           size="lg"
-          icon={<ArrowRight className="w-5 h-5" />}
+          icon={<ArrowRight className="w-5 h-5 rtl-flip" />}
         >
-          Aage Badhein
+          {t('addPhoto.nextBtn')}
         </Button>
       </div>
     </div>

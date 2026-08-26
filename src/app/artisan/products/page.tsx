@@ -3,13 +3,15 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useArtisan } from '@/context/ArtisanContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { ProductCard } from '@/components/products/ProductCard';
 import { Button } from '@/components/ui/Button';
-import { PlusCircle, Package, Layers } from 'lucide-react';
+import { PlusCircle, Package } from 'lucide-react';
 
 export default function MyCollectionPage() {
   const router = useRouter();
   const { products, currentFilter, setCurrentFilter, deleteProduct } = useArtisan();
+  const { t } = useLanguage();
 
   const filteredProducts = products.filter((product) => {
     if (currentFilter === 'published') return product.status === 'published';
@@ -20,14 +22,14 @@ export default function MyCollectionPage() {
   return (
     <div className="flex-1 flex flex-col px-5 py-6 space-y-6">
       {/* Title & Add Action */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-headline text-3xl font-bold text-[#2e3230]">
-            Meri Collection
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h2 className="font-headline text-3xl font-bold text-[#2e3230] truncate">
+            {t('catalog.title')}
           </h2>
           <p className="font-label text-xs font-semibold text-[#6b6358] flex items-center gap-1.5 mt-0.5">
-            <Package className="w-3.5 h-3.5 text-[#4a7c59]" />
-            <span>{products.length} Products in Catalog</span>
+            <Package className="w-3.5 h-3.5 text-[#4a7c59] shrink-0" />
+            <span className="truncate">{t('catalog.countSub', { count: products.length })}</span>
           </p>
         </div>
 
@@ -36,8 +38,9 @@ export default function MyCollectionPage() {
           size="sm"
           icon={<PlusCircle className="w-4 h-4" />}
           iconPosition="left"
+          className="shrink-0"
         >
-          Add Product
+          {t('catalog.addProduct')}
         </Button>
       </div>
 
@@ -46,9 +49,9 @@ export default function MyCollectionPage() {
         {(['all', 'published', 'draft'] as const).map((filter) => {
           const isActive = currentFilter === filter;
           const labels = {
-            all: 'All Items',
-            published: 'Published',
-            draft: 'Drafts',
+            all: t('catalog.all'),
+            published: t('catalog.published'),
+            draft: t('catalog.drafts'),
           };
 
           return (
@@ -75,10 +78,10 @@ export default function MyCollectionPage() {
           </div>
           <div className="space-y-1 max-w-xs">
             <h3 className="font-headline text-xl font-bold text-[#2e3230]">
-              Abhi koi product nahi hai
+              {t('catalog.emptyTitle')}
             </h3>
             <p className="font-body text-xs text-[#6b6358]">
-              Apna pehla product add karein aur apni collection shuru karein!
+              {t('catalog.emptySub')}
             </p>
           </div>
           <Button
@@ -86,7 +89,7 @@ export default function MyCollectionPage() {
             size="md"
             icon={<PlusCircle className="w-4 h-4" />}
           >
-            Pehla Product Add Karein
+            {t('catalog.emptyBtn')}
           </Button>
         </div>
       ) : (

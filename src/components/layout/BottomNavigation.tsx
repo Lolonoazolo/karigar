@@ -28,7 +28,7 @@ export const BottomNavigation: React.FC = () => {
     {
       key: 'add',
       label: t('catalog.addProduct'),
-      href: '/artisan/products/new/photo',
+      href: '/artisan/products/new',
       icon: PlusCircle,
       isPrimaryAdd: true,
       isActive: pathname?.startsWith('/artisan/products/new'),
@@ -43,9 +43,9 @@ export const BottomNavigation: React.FC = () => {
     {
       key: 'profile',
       label: t('common.profile'),
-      href: '/onboarding/profile',
+      href: '/profile',
       icon: User,
-      isActive: pathname === '/onboarding/profile',
+      isActive: pathname === '/profile' || pathname === '/onboarding/profile',
     },
   ];
 

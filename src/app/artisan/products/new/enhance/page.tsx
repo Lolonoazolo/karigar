@@ -3,43 +3,44 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProductDraft } from '@/context/ProductDraftContext';
+import { useArtisan } from '@/context/ArtisanContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { ProgressIndicator } from '@/components/ui/ProgressIndicator';
 import { Button } from '@/components/ui/Button';
 import { BeforeAfterSlider } from '@/components/ai/BeforeAfterSlider';
-import { CheckCircle2, Sparkles, Wand2, RefreshCw, ArrowRight } from 'lucide-react';
+import { CheckCircle2, Sparkles, Wand2, RefreshCw, ArrowRight, AlertCircle } from 'lucide-react';
 import { enhanceProductPhoto } from '@/lib/ai/photoEnhancement';
 
 export default function AIStudioEnhancePage() {
   const router = useRouter();
   const { draft, updateDraft } = useProductDraft();
+  const { user } = useArtisan();
   const { t, language } = useLanguage();
 
   const [isProcessing, setIsProcessing] = useState<boolean>(true);
-  const [stepState, setStepState] = useState<number>(1);
+  const [aiConfigured, setAiConfigured] = useState<boolean>(true);
+  const [aiMessage, setAiMessage] = useState<string>('');
 
   useEffect(() => {
     let isMounted = true;
     const runEnhance = async () => {
-      setStepState(1);
-      setTimeout(() => {
-        if (isMounted) setStepState(2);
-      }, 600);
+      setIsProcessing(true);
+      const res = await enhanceProductPhoto(draft.photo, language, user?.id);
 
-      setTimeout(() => {
-        if (isMounted) setStepState(3);
-      }, 1200);
-
-      const res = await enhanceProductPhoto(draft.photo, language);
       if (isMounted) {
         setIsProcessing(false);
-        if (!draft.name) {
+        setAiConfigured(res.configured);
+        setAiMessage(res.message);
+
+        if (res.configured) {
           updateDraft({
-            name: res.suggestedTitle,
-            description: res.suggestedDescription,
-            tags: res.tags,
+            name: res.suggestedTitle || draft.name,
+            description: res.suggestedDescription || draft.description,
+            tags: res.tags && res.tags.length > 0 ? res.tags : draft.tags,
             enhancedPhoto: res.enhancedImage || draft.photo,
           });
+        } else {
+          updateDraft({ enhancedPhoto: draft.photo });
         }
       }
     };
@@ -48,7 +49,7 @@ export default function AIStudioEnhancePage() {
     return () => {
       isMounted = false;
     };
-  }, [language]);
+  }, [language, user?.id]);
 
   const handleUseEnhanced = () => {
     router.push('/artisan/products/new/price');
@@ -82,13 +83,24 @@ export default function AIStudioEnhancePage() {
         </p>
       </div>
 
+      {/* AI Configuration Status Alert */}
+      {!aiConfigured && (
+        <div className="bg-[#fff8e1] border border-[#ffe082] rounded-xl p-3.5 text-xs text-[#7f6000] flex items-start gap-2.5">
+          <AlertCircle className="w-4 h-4 text-[#f57f17] shrink-0 mt-0.5" />
+          <div>
+            <span className="font-bold block">AI Photo Model Pending Configuration</span>
+            <p className="text-[11px] mt-0.5">{aiMessage}</p>
+          </div>
+        </div>
+      )}
+
       {/* Before / After Interactive Touch Slider */}
       <BeforeAfterSlider
         beforeImage={draft.photo}
         afterImage={draft.enhancedPhoto || draft.photo}
       />
 
-      {/* AI Processing Step Animation Card */}
+      {/* AI Processing Status Card */}
       <div className="bg-white rounded-2xl p-5 soft-shadow border border-[#c4c8bc]/30 space-y-3">
         <h3 className="font-headline text-sm font-bold text-[#2e3230] flex items-center gap-1.5">
           <Wand2 className="w-4 h-4 text-[#4a7c59]" /> {t('addEnhance.statusTitle')}
@@ -100,45 +112,20 @@ export default function AIStudioEnhancePage() {
               <CheckCircle2 className="w-4 h-4" />
             </div>
             <span className="font-semibold text-[#2e3230]">
-              {t('addEnhance.step1')}
+              Photo uploaded successfully
             </span>
           </div>
 
           <div className="flex items-center gap-3">
             <div
               className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
-                stepState >= 2
-                  ? 'bg-[#d8f0de] text-[#4a7c59]'
-                  : 'bg-[#eae6de] text-[#6b6358]'
+                aiConfigured ? 'bg-[#d8f0de] text-[#4a7c59]' : 'bg-[#eae6de] text-[#6b6358]'
               }`}
             >
-              {stepState >= 2 ? (
-                <CheckCircle2 className="w-4 h-4" />
-              ) : (
-                <div className="w-2 h-2 rounded-full bg-[#6b6358]" />
-              )}
+              <CheckCircle2 className="w-4 h-4" />
             </div>
             <span className="font-semibold text-[#2e3230]">
-              {t('addEnhance.step2')}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div
-              className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
-                stepState >= 3
-                  ? 'bg-[#f8e0a8] text-[#705c30]'
-                  : 'bg-[#eae6de] text-[#6b6358]'
-              }`}
-            >
-              {stepState >= 3 ? (
-                <CheckCircle2 className="w-4 h-4" />
-              ) : (
-                <div className="w-2 h-2 rounded-full bg-[#6b6358]" />
-              )}
-            </div>
-            <span className="font-semibold text-[#705c30]">
-              {t('addEnhance.step3')}
+              {aiConfigured ? 'AI Vision enhancement active' : 'Original photo staged'}
             </span>
           </div>
         </div>

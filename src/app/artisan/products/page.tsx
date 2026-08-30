@@ -10,7 +10,7 @@ import { PlusCircle, Package } from 'lucide-react';
 
 export default function MyCollectionPage() {
   const router = useRouter();
-  const { products, currentFilter, setCurrentFilter, deleteProduct } = useArtisan();
+  const { products, isLoading, currentFilter, setCurrentFilter, deleteProduct } = useArtisan();
   const { t } = useLanguage();
 
   const filteredProducts = products.filter((product) => {
@@ -34,7 +34,7 @@ export default function MyCollectionPage() {
         </div>
 
         <Button
-          onClick={() => router.push('/artisan/products/new/photo')}
+          onClick={() => router.push('/artisan/products/new')}
           size="sm"
           icon={<PlusCircle className="w-4 h-4" />}
           iconPosition="left"
@@ -70,8 +70,13 @@ export default function MyCollectionPage() {
         })}
       </div>
 
-      {/* Product Grid or Empty State */}
-      {filteredProducts.length === 0 ? (
+      {/* Product Grid or Loading / Empty State */}
+      {isLoading ? (
+        <div className="flex-1 flex flex-col items-center justify-center py-16 text-center space-y-3">
+          <div className="w-8 h-8 border-4 border-[#4a7c59] border-t-transparent rounded-full spinner" />
+          <p className="font-label text-xs text-[#6b6358]">Loading products from database...</p>
+        </div>
+      ) : filteredProducts.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-16 px-4 text-center space-y-4 bg-white rounded-2xl border border-[#c4c8bc]/30 soft-shadow">
           <div className="w-20 h-20 rounded-full bg-[#f8e0a8]/40 flex items-center justify-center text-4xl">
             🎨
@@ -85,7 +90,7 @@ export default function MyCollectionPage() {
             </p>
           </div>
           <Button
-            onClick={() => router.push('/artisan/products/new/photo')}
+            onClick={() => router.push('/artisan/products/new')}
             size="md"
             icon={<PlusCircle className="w-4 h-4" />}
           >

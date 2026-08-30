@@ -13,26 +13,26 @@ type ProductDraftContextType = {
 
 const DRAFT_STORAGE_KEY = 'karigarai_product_draft_v1';
 
-const initialDraft: ProductDraft = {
+const emptyDraft: ProductDraft = {
   photo: null,
   enhancedPhoto: null,
   story: '',
   category: 'Textiles',
   name: '',
-  cost: 700,
-  desiredProfit: 250,
-  recommendedPrice: 1099,
-  price: 1099,
-  sku: 'KD-001',
-  stock: 24,
-  tags: ['Handmade', 'Cotton', 'Banarasi Craft'],
-  description: 'Handcrafted premium craft item made by skilled artisans.',
+  cost: 0,
+  desiredProfit: 0,
+  recommendedPrice: 0,
+  price: 0,
+  sku: '',
+  stock: 0,
+  tags: [],
+  description: '',
 };
 
 const ProductDraftContext = createContext<ProductDraftContextType | undefined>(undefined);
 
 export const ProductDraftProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [draft, setDraft] = useState<ProductDraft>(initialDraft);
+  const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
   const [lastSavedProduct, setLastSavedProductState] = useState<ProductDraft | null>(null);
 
   useEffect(() => {
@@ -59,7 +59,7 @@ export const ProductDraftProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   const resetDraft = () => {
-    setDraft(initialDraft);
+    setDraft(emptyDraft);
     try {
       localStorage.removeItem(DRAFT_STORAGE_KEY);
     } catch (e) {

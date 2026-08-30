@@ -1,7 +1,4 @@
-/**
- * AI Photo Enhancement service abstraction for KarigarAI prototype.
- * Returns simulated enhanced photo results & extracted product details.
- */
+import { analyzeProductImage } from '@/services/ai/imageAnalysis';
 
 export type PhotoEnhancementResult = {
   enhancedImage: string;
@@ -9,20 +6,24 @@ export type PhotoEnhancementResult = {
   suggestedTitle: string;
   suggestedDescription: string;
   tags: string[];
+  configured: boolean;
+  message: string;
 };
 
 export async function enhanceProductPhoto(
-  originalPhotoUrl?: string | null
+  originalPhotoUrl?: string | null,
+  language?: string,
+  userId?: string
 ): Promise<PhotoEnhancementResult> {
-  // Simulate AI processing delay
-  await new Promise((resolve) => setTimeout(resolve, 1200));
+  const result = await analyzeProductImage(originalPhotoUrl || '', userId);
 
   return {
-    enhancedImage: originalPhotoUrl || '/placeholder-enhanced.png',
-    detectedCategory: 'Textiles',
-    suggestedTitle: 'Handcrafted Cotton Dupatta',
-    suggestedDescription:
-      'Exquisite handwoven Banarasi cotton dupatta with soft vibrant hues, traditional border motifs, and polished lighting.',
-    tags: ['Handmade', 'Cotton', 'Banarasi Craft', 'Eco-friendly'],
+    enhancedImage: result.enhancedPhotoUrl || originalPhotoUrl || '',
+    detectedCategory: result.detectedCategory || '',
+    suggestedTitle: result.suggestedTitle || '',
+    suggestedDescription: result.suggestedDescription || '',
+    tags: result.tags || [],
+    configured: result.configured,
+    message: result.message,
   };
 }

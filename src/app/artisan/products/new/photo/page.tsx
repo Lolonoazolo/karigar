@@ -34,9 +34,8 @@ export default function ProductPhotoPage() {
 
   const handleNext = () => {
     if (!draft.photo) {
-      const samplePhoto =
-        'https://images.unsplash.com/photo-1610701596007-11502861dcfa?q=80&w=800&auto=format&fit=crop';
-      updateDraft({ photo: samplePhoto, enhancedPhoto: samplePhoto });
+      showToast('Kripya product ki photo khinchein ya gallery se chunein.');
+      return;
     }
     router.push('/artisan/products/new/story');
   };
@@ -116,12 +115,12 @@ export default function ProductPhotoPage() {
         <button
           type="button"
           onClick={() => cameraInputRef.current?.click()}
-          className="bg-[#4a7c59] hover:bg-[#3d6849] text-white rounded-2xl p-4 flex flex-col items-center justify-center gap-2 transition-all active:scale-95 soft-shadow group"
+          className="bg-[#4a7c59] hover:bg-[#3d6849] text-[#002110] rounded-2xl p-4 flex flex-col items-center justify-center gap-2 transition-all active:scale-95 soft-shadow group"
         >
           <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center group-hover:scale-110 transition-transform">
             <Camera className="w-5 h-5 text-white" />
           </div>
-          <span className="font-label font-bold text-sm text-center leading-tight">
+          <span className="font-label font-bold text-sm text-center leading-tight text-white">
             {t('addPhoto.clickPhoto')}
           </span>
         </button>
@@ -144,7 +143,6 @@ export default function ProductPhotoPage() {
       <div className="pt-2">
         <Button
           onClick={handleNext}
-          variant="tertiary"
           fullWidth
           size="lg"
           icon={<ArrowRight className="w-5 h-5 rtl-flip" />}

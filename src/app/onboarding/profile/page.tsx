@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { MobilePage } from '@/components/layout/MobilePage';
 import { useArtisan } from '@/context/ArtisanContext';
@@ -8,28 +8,31 @@ import { useLanguage } from '@/context/LanguageContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Toast } from '@/components/ui/Toast';
-import { VoiceRecorder } from '@/components/ai/VoiceRecorder';
-import { ArrowLeft, ArrowRight, User, Store, Lock, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, User, Store, Lock, Phone, MapPin } from 'lucide-react';
 
 export default function ProfileSetupPage() {
   const router = useRouter();
-  const { login, demoLogin, toast, showToast } = useArtisan();
-  const { t, language } = useLanguage();
+  const { user, updateProfile, logout, toast, showToast } = useArtisan();
+  const { t } = useLanguage();
 
   const [mobile, setMobile] = useState('');
   const [name, setName] = useState('');
   const [shop, setShop] = useState('');
-  const [bio, setBio] = useState('');
-  const [showTextInput, setShowTextInput] = useState(false);
+  const [location, setLocation] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  useEffect(() => {
+    if (user) {
+      setName(user.name || '');
+      setMobile(user.mobile || '');
+      setShop(user.shop || user.craft || '');
+      setLocation(user.location || '');
+    }
+  }, [user]);
 
   const validate = () => {
     const errs: { [key: string]: string } = {};
-    if (!mobile.trim()) {
-      errs.mobile = t('onboarding.errMobileRequired');
-    } else if (mobile.replace(/\D/g, '').length < 10) {
-      errs.mobile = t('onboarding.errMobile10');
-    }
 
     if (!name.trim()) {
       errs.name = t('onboarding.errNameRequired');
@@ -43,27 +46,30 @@ export default function ProfileSetupPage() {
     return Object.keys(errs).length === 0;
   };
 
-  const handleProfileSubmit = (e: React.FormEvent) => {
+  const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) {
       showToast(t('onboarding.errFillAll'));
       return;
     }
 
-    login({
-      mobile: mobile.trim(),
-      name: name.trim(),
-      shop: shop.trim(),
-      lang: language,
-      bio: bio.trim(),
-    });
+    setIsSubmitting(true);
+    try {
+      await updateProfile({
+        name: name.trim(),
+        shop: shop.trim(),
+        craft: shop.trim(),
+        location: location.trim(),
+        mobile: mobile.trim() || user?.mobile || '',
+      });
 
-    router.push('/artisan/products');
-  };
-
-  const handleDemoClick = () => {
-    demoLogin();
-    router.push('/artisan/products');
+      showToast('Profile safalta purvak create ho gaya!');
+      router.push('/artisan/products');
+    } catch (err: any) {
+      showToast(err.message || 'Profile setup karne mein samasya aayi.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -73,7 +79,7 @@ export default function ProfileSetupPage() {
       {/* Header */}
       <header className="px-5 py-4 flex items-center justify-between border-b border-[#c4c8bc]/30 sticky top-0 bg-[#faf6f0] z-20">
         <button
-          onClick={() => router.push('/onboarding/language')}
+          onClick={() => router.push('/login')}
           className="p-2 -ml-2 rounded-full hover:bg-[#f0ece4] transition-colors text-[#2e3230]"
           aria-label={t('accessibility.back')}
         >
@@ -102,19 +108,8 @@ export default function ProfileSetupPage() {
           </div>
         </div>
 
-        {/* Profile Form */}
+        {/* Profile Setup Form */}
         <form onSubmit={handleProfileSubmit} className="space-y-4 bg-white p-5 rounded-2xl soft-shadow border border-[#c4c8bc]/30">
-          <Input
-            label={t('onboarding.mobileLabel')}
-            type="tel"
-            placeholder={t('onboarding.mobilePlaceholder')}
-            prefixText="🇮🇳 +91"
-            value={mobile}
-            onChange={(e) => setMobile(e.target.value)}
-            error={errors.mobile}
-            required
-          />
-
           <Input
             label={t('onboarding.nameLabel')}
             type="text"
@@ -137,48 +132,25 @@ export default function ProfileSetupPage() {
             required
           />
 
-          {/* Voice Story Section */}
-          <div className="pt-4 border-t border-[#f0ece4] space-y-3">
-            <div className="text-center">
-              <h3 className="font-headline font-bold text-lg text-[#2e3230]">
-                {t('onboarding.tellAboutTitle')}
-              </h3>
-              <p className="font-label text-xs text-[#6b6358]">
-                {t('onboarding.tellAboutSub')}
-              </p>
-            </div>
+          <Input
+            label="Mobile Number"
+            type="tel"
+            placeholder="+91 98765 43210"
+            leftIcon={<Phone className="w-5 h-5 text-[#74796e]" />}
+            value={mobile || user?.mobile || ''}
+            onChange={(e) => setMobile(e.target.value)}
+            disabled={Boolean(user?.mobile)}
+            helperText="Phone OTP dwara verified mobile number"
+          />
 
-            <VoiceRecorder
-              onTranscriptComplete={(text) => setBio(text)}
-              promptText={t('addStory.voicePrompt')}
-            />
-
-            {/* Alternative text bio button */}
-            <div className="text-center">
-              {!showTextInput ? (
-                <button
-                  type="button"
-                  onClick={() => setShowTextInput(true)}
-                  className="font-label text-xs font-semibold text-[#6b6358] hover:text-[#4a7c59] underline underline-offset-4"
-                >
-                  {t('onboarding.writeInstead')}
-                </button>
-              ) : (
-                <div className="space-y-2 text-left">
-                  <label className="block font-label text-xs font-semibold text-[#4a4e4a]">
-                    {t('onboarding.writeBioLabel')}
-                  </label>
-                  <textarea
-                    value={bio}
-                    onChange={(e) => setBio(e.target.value)}
-                    rows={3}
-                    placeholder={t('onboarding.writeBioPlaceholder')}
-                    className="w-full bg-[#f5f1ea] border border-[#c4c8bc]/60 rounded-xl p-3 text-sm text-[#2e3230] focus:ring-2 focus:ring-[#4a7c59] focus:outline-none font-body resize-none"
-                  />
-                </div>
-              )}
-            </div>
-          </div>
+          <Input
+            label="Location / Sthan"
+            type="text"
+            placeholder="Jaise: Varanasi, Uttar Pradesh"
+            leftIcon={<MapPin className="w-5 h-5 text-[#74796e]" />}
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+          />
 
           {/* Action CTAs */}
           <div className="pt-4 space-y-3">
@@ -186,22 +158,23 @@ export default function ProfileSetupPage() {
               type="submit"
               fullWidth
               size="lg"
+              disabled={isSubmitting}
               icon={<ArrowRight className="w-5 h-5 rtl-flip" />}
             >
-              {t('onboarding.submitProfile')}
+              {isSubmitting ? 'Saving Profile...' : t('onboarding.submitProfile')}
             </Button>
 
-            <Button
-              type="button"
-              variant="secondary"
-              fullWidth
-              size="md"
-              onClick={handleDemoClick}
-              icon={<Sparkles className="w-4 h-4 text-[#4a7c59]" />}
-              iconPosition="left"
-            >
-              {t('onboarding.demoLoginBtn')}
-            </Button>
+            {user && (
+              <Button
+                type="button"
+                variant="secondary"
+                fullWidth
+                size="md"
+                onClick={logout}
+              >
+                Log Out Current Session
+              </Button>
+            )}
           </div>
         </form>
 

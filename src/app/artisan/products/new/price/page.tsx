@@ -14,23 +14,22 @@ import { recommendPrice } from '@/lib/ai/pricing';
 export default function AIPriceRecommendationPage() {
   const router = useRouter();
   const { draft, updateDraft } = useProductDraft();
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
 
-  const [makingCost, setMakingCost] = useState<number>(draft.cost || 700);
-  const [desiredProfit, setDesiredProfit] = useState<number>(draft.desiredProfit || 250);
-  const [recommendedPrice, setRecommendedPrice] = useState<number>(draft.recommendedPrice || 1099);
+  const [makingCost, setMakingCost] = useState<number>(draft.cost || 0);
+  const [desiredProfit, setDesiredProfit] = useState<number>(draft.desiredProfit || 0);
+  const [recommendedPrice, setRecommendedPrice] = useState<number>(draft.recommendedPrice || 0);
   const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
 
   // Recalculate price when making cost or profit changes
   useEffect(() => {
-    const marketPosition = 149;
-    const total = makingCost + desiredProfit + marketPosition;
-    setRecommendedPrice(total > 0 ? total : 1099);
+    const total = makingCost + desiredProfit;
+    setRecommendedPrice(total);
   }, [makingCost, desiredProfit]);
 
   const handleAiPriceRefresh = async () => {
     setIsAiLoading(true);
-    const result = await recommendPrice(makingCost, desiredProfit, draft.name, language);
+    const result = await recommendPrice(makingCost, desiredProfit, draft.name);
     setRecommendedPrice(result.recommendedPrice);
     setIsAiLoading(false);
   };
@@ -72,7 +71,7 @@ export default function AIPriceRecommendationPage() {
           label={t('addPrice.makingCostLabel')}
           type="number"
           prefixText="₹"
-          placeholder="700"
+          placeholder="0"
           value={makingCost || ''}
           onChange={(e) => setMakingCost(parseInt(e.target.value) || 0)}
           required
@@ -82,7 +81,7 @@ export default function AIPriceRecommendationPage() {
           label={t('addPrice.desiredProfitLabel')}
           type="number"
           prefixText="₹"
-          placeholder="250"
+          placeholder="0"
           value={desiredProfit || ''}
           onChange={(e) => setDesiredProfit(parseInt(e.target.value) || 0)}
           required
@@ -99,7 +98,7 @@ export default function AIPriceRecommendationPage() {
         </button>
       </div>
 
-      {/* AI Recommendation Card */}
+      {/* Pricing Calculation Card */}
       <AIPriceCard
         makingCost={makingCost}
         desiredProfit={desiredProfit}

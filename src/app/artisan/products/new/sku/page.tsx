@@ -11,44 +11,81 @@ import { Input } from '@/components/ui/Input';
 import { CheckCircle2, ArrowRight, Package, Tag, Folder, Edit3 } from 'lucide-react';
 import { PRODUCT_CATEGORIES } from '@/data/categories';
 import { ProductCategory } from '@/types';
+import { uploadProductImage } from '@/services/productService';
 
 export default function SKUAndStockPage() {
   const router = useRouter();
-  const { draft, updateDraft, setLastSavedProduct, resetDraft } = useProductDraft();
-  const { addProduct, showToast } = useArtisan();
+  const { draft, setLastSavedProduct, resetDraft } = useProductDraft();
+  const { user, addProduct, showToast } = useArtisan();
   const { t, formatCurr } = useLanguage();
 
-  const [sku] = useState<string>(draft.sku || `KD-00${Math.floor(Math.random() * 90 + 10)}`);
-  const [productName, setProductName] = useState<string>(draft.name || 'Handcrafted Cotton Dupatta');
+  const generatedSku = `SKU-${Date.now().toString().slice(-6)}`;
+  const [sku] = useState<string>(draft.sku || generatedSku);
+  const [productName, setProductName] = useState<string>(draft.name || '');
   const [category, setCategory] = useState<ProductCategory>(draft.category || 'Textiles');
-  const [stock, setStock] = useState<number>(draft.stock || 24);
+  const [stock, setStock] = useState<number>(draft.stock || 1);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
 
-  const handleSaveProduct = () => {
+  const handleSaveProduct = async () => {
+    if (!productName.trim()) {
+      setError('Kripya product ka naam bharein.');
+      showToast('Product ka naam avashyak hai.');
+      return;
+    }
+
     if (stock < 0 || isNaN(stock)) {
       setError(t('addSku.stockError'));
       showToast(t('addSku.stockToast'));
       return;
     }
 
-    const finalProduct = {
-      name: productName,
-      price: draft.price || 1099,
-      cost: draft.cost || 700,
-      profit: draft.desiredProfit || 250,
-      sku: sku,
-      stock: stock,
-      category: category,
-      description: draft.description || 'Exquisite handcrafted artisan product.',
-      tags: draft.tags || ['Handmade', 'Cotton', 'Banarasi Craft'],
-      status: 'published' as const,
-      photo: draft.enhancedPhoto || draft.photo || null,
-    };
+    setIsSaving(true);
+    try {
+      let finalPhotoUrl: string | null = draft.enhancedPhoto || draft.photo || null;
 
-    const saved = addProduct(finalProduct);
-    setLastSavedProduct(saved);
-    resetDraft();
-    router.push('/artisan/products/success');
+      // If photo is a base64 Data URL and user is logged in, upload to Supabase Storage
+      if (finalPhotoUrl && finalPhotoUrl.startsWith('data:') && user?.id) {
+        try {
+          const res = await fetch(finalPhotoUrl);
+          const blob = await res.blob();
+          const uploadedUrl = await uploadProductImage(user.id, blob);
+          if (uploadedUrl) {
+            finalPhotoUrl = uploadedUrl;
+          }
+        } catch (uploadErr) {
+          console.warn('Failed to upload image blob to storage, using staged reference:', uploadErr);
+        }
+      }
+
+      const finalProductData = {
+        name: productName.trim(),
+        price: draft.price || 0,
+        cost: draft.cost || 0,
+        profit: draft.desiredProfit || 0,
+        sku: sku,
+        stock: stock,
+        category: category,
+        description: draft.description || draft.story || '',
+        tags: draft.tags || [category],
+        status: 'published' as const,
+        photo: finalPhotoUrl,
+        enhancedPhoto: finalPhotoUrl,
+      };
+
+      const saved = await addProduct(finalProductData);
+      if (saved) {
+        setLastSavedProduct(saved);
+        resetDraft();
+        router.push('/artisan/products/success');
+      } else {
+        showToast('Product create karne mein samasya aayi.');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Product save karne mein truti aayi.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -112,6 +149,7 @@ export default function SKUAndStockPage() {
         <Input
           label={t('addSku.nameLabel')}
           type="text"
+          placeholder="Product Ka Naam"
           value={productName}
           onChange={(e) => setProductName(e.target.value)}
           leftIcon={<Edit3 className="w-4 h-4 text-[#74796e]" />}
@@ -124,7 +162,7 @@ export default function SKUAndStockPage() {
             {t('addSku.priceLabel')}
           </label>
           <div className="bg-[#f5f1ea] px-4 py-3 rounded-xl border border-[#c4c8bc]/50 flex justify-between items-center font-bold text-[#4a7c59]">
-            <span>{formatCurr(draft.price || 1099)}</span>
+            <span>{formatCurr(draft.price || 0)}</span>
             <Tag className="w-4 h-4 text-[#74796e]" />
           </div>
         </div>
@@ -156,9 +194,10 @@ export default function SKUAndStockPage() {
           onClick={handleSaveProduct}
           fullWidth
           size="lg"
+          disabled={isSaving}
           icon={<ArrowRight className="w-5 h-5 rtl-flip" />}
         >
-          {t('addSku.saveBtn')}
+          {isSaving ? 'Saving to Database...' : t('addSku.saveBtn')}
         </Button>
       </div>
     </div>

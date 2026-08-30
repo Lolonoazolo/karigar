@@ -9,17 +9,25 @@ export type Language = {
 };
 
 export type ArtisanUser = {
+  id?: string;
+  email?: string;
   mobile: string;
   name: string;
   shop: string;
+  craft?: string;
+  location?: string;
   lang: string;
   bio?: string;
+  role?: 'artisan' | 'customer' | 'admin';
+  artisanId?: string;
+  avatarUrl?: string;
 };
 
 export type ProductCategory = 'Textiles' | 'Pottery' | 'Woodwork' | 'Jewelry' | 'Painting' | 'Handmade' | 'Other';
 
 export type Product = {
   id: string;
+  artisanId?: string;
   name: string;
   price: number;
   cost: number;
@@ -29,10 +37,37 @@ export type Product = {
   category: ProductCategory;
   description?: string;
   tags?: string[];
-  status: 'published' | 'draft';
+  status: 'published' | 'draft' | 'archived';
   photo?: string | null;
   enhancedPhoto?: string | null;
   createdAt: number;
+};
+
+export type ProductDataSchema = {
+  product_name: string | null;
+  category: string | null;
+  craft_type: string | null;
+  material: string | null;
+  description: string | null;
+  price: number | null;
+  currency: string;
+  quantity: number | null;
+  color?: string | null;
+  dimensions?: string | null;
+  weight?: string | null;
+  production_time_days?: number | null;
+  origin?: string | null;
+  care_instructions?: string | null;
+  tags?: string[];
+};
+
+export type ProductTranslation = {
+  id?: string;
+  productId: string;
+  languageCode: string;
+  originalDescription: string;
+  englishDescription: string;
+  createdAt?: number;
 };
 
 export type ProductDraft = {
@@ -49,6 +84,13 @@ export type ProductDraft = {
   stock?: number;
   tags?: string[];
   description?: string;
+  craftType?: string;
+  material?: string;
+  productionTimeDays?: number;
+  color?: string;
+  origin?: string;
+  originalLanguage?: string;
+  originalDescription?: string;
 };
 
 export type SalesMetric = {

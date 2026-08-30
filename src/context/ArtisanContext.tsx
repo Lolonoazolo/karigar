@@ -1,10 +1,13 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { ArtisanUser, Product } from '@/types';
-import { INITIAL_MOCK_PRODUCTS } from '@/data/mockProducts';
 import { useLanguage } from '@/context/LanguageContext';
 import { LanguageId } from '@/lib/i18n/languages';
+import { getCurrentUser, signOut, subscribeToAuthChanges } from '@/services/authService';
+import { getProfile, getArtisanProfile, updateArtisanFullProfile, upsertArtisanProfileData } from '@/services/profileService';
+import { getArtisanProducts, createProduct, updateProductInDB, deleteProductFromDB } from '@/services/productService';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
 
 type ToastState = {
   message: string;
@@ -16,12 +19,14 @@ type ArtisanContextType = {
   selectedLang: string;
   setSelectedLang: (lang: string) => void;
   products: Product[];
-  login: (user: ArtisanUser) => void;
-  demoLogin: () => void;
-  logout: () => void;
-  addProduct: (product: Omit<Product, 'id' | 'createdAt'>) => Product;
-  deleteProduct: (id: string) => void;
-  updateProduct: (id: string, updates: Partial<Product>) => void;
+  isLoading: boolean;
+  login: (user: ArtisanUser) => Promise<void>;
+  logout: () => Promise<void>;
+  updateProfile: (updates: Partial<ArtisanUser>) => Promise<void>;
+  addProduct: (productData: Omit<Product, 'id' | 'createdAt'>) => Promise<Product | null>;
+  deleteProduct: (id: string) => Promise<void>;
+  updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
+  refreshProducts: () => Promise<void>;
   toast: ToastState;
   showToast: (msg: string) => void;
   currentFilter: 'all' | 'published' | 'draft';
@@ -30,107 +35,181 @@ type ArtisanContextType = {
 
 const ArtisanContext = createContext<ArtisanContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'karigarai_artisan_data_v1';
-
 export const ArtisanProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { language, setLanguage, t } = useLanguage();
   const [user, setUser] = useState<ArtisanUser | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [currentFilter, setCurrentFilter] = useState<'all' | 'published' | 'draft'>('all');
   const [toast, setToast] = useState<ToastState>({ message: '', visible: false });
 
-  // Load from localStorage on mount
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.user) setUser(parsed.user);
-        if (parsed.products && Array.isArray(parsed.products) && parsed.products.length > 0) {
-          setProducts(parsed.products);
-        } else {
-          setProducts(INITIAL_MOCK_PRODUCTS);
-        }
-      } else {
-        setProducts(INITIAL_MOCK_PRODUCTS);
-      }
-    } catch (e) {
-      console.error('Failed to load artisan state from storage', e);
-      setProducts(INITIAL_MOCK_PRODUCTS);
-    }
-  }, []);
-
-  // Save to localStorage when state updates
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({
-            user,
-            selectedLang: language,
-            products,
-          })
-        );
-      } catch (e) {
-        console.error('Failed to save artisan state to storage', e);
-      }
-    }
-  }, [user, language, products]);
-
-  const showToast = (message: string) => {
+  const showToast = useCallback((message: string) => {
     setToast({ message, visible: true });
     setTimeout(() => {
       setToast((prev) => ({ ...prev, visible: false }));
     }, 3000);
-  };
+  }, []);
 
-  const login = (newUser: ArtisanUser) => {
-    setUser(newUser);
-    showToast(t('onboarding.welcomeToast', { name: newUser.name }));
-  };
-
-  const demoLogin = () => {
-    const demoUser: ArtisanUser = {
-      mobile: '98765 43210',
-      name: t('common.karigar'),
-      shop: 'Karigar Crafts',
-      lang: language,
-      bio: 'Main pichhle 10 saal se haath se traditional craft banata hoon.',
-    };
-    setUser(demoUser);
-    if (products.length === 0) {
-      setProducts(INITIAL_MOCK_PRODUCTS);
+  const loadUserData = useCallback(async (sbUser: any) => {
+    if (!sbUser) {
+      setUser(null);
+      setProducts([]);
+      setIsLoading(false);
+      return;
     }
-    showToast(t('onboarding.demoToast'));
+
+    try {
+      const profile = await getProfile(sbUser.id);
+      const artisan = await getArtisanProfile(sbUser.id);
+
+      const artisanUser: ArtisanUser = {
+        id: sbUser.id,
+        email: sbUser.email || '',
+        mobile: profile?.phone || sbUser.phone || '',
+        name: profile?.full_name || sbUser.user_metadata?.full_name || t('common.karigar'),
+        shop: profile?.craft || artisan?.craft_type || 'Artisan Shop',
+        craft: profile?.craft || artisan?.craft_type || 'Handicrafts',
+        location: profile?.location || artisan?.location || 'India',
+        lang: profile?.preferred_language || language,
+        bio: profile?.bio || artisan?.bio || '',
+        role: profile?.role || 'artisan',
+        artisanId: sbUser.id,
+        avatarUrl: profile?.avatar_url || undefined,
+      };
+
+      setUser(artisanUser);
+
+      // Load artisan products from database
+      const dbProducts = await getArtisanProducts(sbUser.id);
+      setProducts(dbProducts);
+    } catch (err) {
+      console.error('Error loading artisan data from Supabase:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [language, t]);
+
+  // Auth Listener
+  useEffect(() => {
+    setIsLoading(true);
+
+    if (!isSupabaseConfigured) {
+      setIsLoading(false);
+      return;
+    }
+
+    // Check existing session
+    getCurrentUser().then((sbUser) => {
+      loadUserData(sbUser);
+    });
+
+    // Subscribe to auth state changes
+    const subscription = subscribeToAuthChanges((sbUser) => {
+      loadUserData(sbUser);
+    });
+
+    return () => {
+      if (subscription && typeof subscription.unsubscribe === 'function') {
+        subscription.unsubscribe();
+      }
+    };
+  }, [loadUserData]);
+
+  const refreshProducts = async () => {
+    if (user?.id) {
+      const updatedList = await getArtisanProducts(user.id);
+      setProducts(updatedList);
+    }
   };
 
-  const logout = () => {
+  const login = async (newUser: ArtisanUser) => {
+    if (!user && !newUser.id) {
+      setUser(newUser);
+      showToast(t('onboarding.welcomeToast', { name: newUser.name }));
+      return;
+    }
+
+    const userId = newUser.id || user?.id;
+    if (userId) {
+      const updatedUser = { ...newUser, id: userId };
+      setUser(updatedUser);
+      await upsertArtisanProfileData(updatedUser);
+      showToast(t('onboarding.welcomeToast', { name: newUser.name }));
+    }
+  };
+
+  const updateProfile = async (updates: Partial<ArtisanUser>) => {
+    if (!user?.id) return;
+    const mergedUser = { ...user, ...updates };
+    setUser(mergedUser);
+
+    try {
+      await updateArtisanFullProfile(user.id, {
+        name: updates.name,
+        craft: updates.craft || updates.shop,
+        location: updates.location,
+        bio: updates.bio,
+        avatarUrl: updates.avatarUrl,
+        mobile: updates.mobile,
+      });
+      showToast('Profile safalta purvak update ho gaya!');
+    } catch (err: any) {
+      showToast(`Profile update failed: ${err.message || 'Error'}`);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await signOut();
+    } catch (e) {
+      console.warn('Signout exception:', e);
+    }
     setUser(null);
+    setProducts([]);
     showToast('Logged out');
   };
 
-  const addProduct = (newProductData: Omit<Product, 'id' | 'createdAt'>): Product => {
-    const newProduct: Product = {
-      ...newProductData,
-      id: `prod_${Date.now()}`,
-      createdAt: Date.now(),
-    };
-    setProducts((prev) => [newProduct, ...prev]);
-    showToast(t('addSku.saveSuccessToast'));
-    return newProduct;
+  const addProduct = async (productData: Omit<Product, 'id' | 'createdAt'>): Promise<Product | null> => {
+    if (!user?.id) {
+      showToast('Please sign in to add products.');
+      return null;
+    }
+
+    try {
+      const newProd = await createProduct(user.id, productData);
+      if (newProd) {
+        setProducts((prev) => [newProd, ...prev]);
+        showToast(t('addSku.saveSuccessToast'));
+        return newProd;
+      }
+    } catch (err: any) {
+      showToast(`Error adding product: ${err.message || 'Failed'}`);
+    }
+    return null;
   };
 
-  const deleteProduct = (id: string) => {
-    setProducts((prev) => prev.filter((p) => p.id !== id));
-    showToast(t('productCard.deleteToast'));
+  const deleteProduct = async (id: string) => {
+    if (!user?.id) return;
+    try {
+      await deleteProductFromDB(id, user.id);
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+      showToast(t('productCard.deleteToast'));
+    } catch (err: any) {
+      showToast(`Delete failed: ${err.message || 'Error'}`);
+    }
   };
 
-  const updateProduct = (id: string, updates: Partial<Product>) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
-    );
-    showToast(t('productCard.shareToast'));
+  const updateProduct = async (id: string, updates: Partial<Product>) => {
+    if (!user?.id) return;
+    try {
+      await updateProductInDB(id, updates, user.id);
+      setProducts((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
+      );
+      showToast(t('productCard.shareToast'));
+    } catch (err: any) {
+      showToast(`Update failed: ${err.message || 'Error'}`);
+    }
   };
 
   return (
@@ -140,12 +219,14 @@ export const ArtisanProvider: React.FC<{ children: React.ReactNode }> = ({ child
         selectedLang: language,
         setSelectedLang: (lang: string) => setLanguage(lang as LanguageId),
         products,
+        isLoading,
         login,
-        demoLogin,
         logout,
+        updateProfile,
         addProduct,
         deleteProduct,
         updateProduct,
+        refreshProducts,
         toast,
         showToast,
         currentFilter,

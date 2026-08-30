@@ -1,6 +1,4 @@
-/**
- * AI Price Recommendation service abstraction for KarigarAI prototype.
- */
+import { recommendProductPrice } from '@/services/ai/pricingRecommendation';
 
 export type PricingBreakdown = {
   materialCost: number;
@@ -9,28 +7,24 @@ export type PricingBreakdown = {
   marketAdjustment: number;
   recommendedPrice: number;
   explanation: string;
+  configured: boolean;
 };
 
 export async function recommendPrice(
-  makingCost: number = 700,
-  desiredProfit: number = 250,
-  productName?: string
+  makingCost: number = 0,
+  desiredProfit: number = 0,
+  productName?: string,
+  userId?: string
 ): Promise<PricingBreakdown> {
-  // Simulate AI calculation
-  await new Promise((resolve) => setTimeout(resolve, 800));
-
-  const materialCost = Math.round(makingCost * 0.64);
-  const craftsmanshipCost = makingCost - materialCost;
-  const marketAdjustment = 149;
-  const recommendedPrice = makingCost + desiredProfit + marketAdjustment;
+  const result = await recommendProductPrice(makingCost, desiredProfit, productName, userId);
 
   return {
-    materialCost,
-    craftsmanshipCost,
-    desiredProfit,
-    marketAdjustment,
-    recommendedPrice: recommendedPrice > 0 ? recommendedPrice : 1099,
-    explanation:
-      'Ye price aapki lagat, craft value aur similar handmade items ke market demand par aadharit hai.',
+    materialCost: result.materialCost,
+    craftsmanshipCost: result.craftsmanshipCost,
+    desiredProfit: result.desiredProfit,
+    marketAdjustment: 0,
+    recommendedPrice: result.recommendedPrice,
+    explanation: result.explanation || '',
+    configured: result.configured,
   };
 }

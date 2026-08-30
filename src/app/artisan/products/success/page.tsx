@@ -87,7 +87,7 @@ export default function ProductSuccessPage() {
             <div className="h-4 w-px bg-[#c4c8bc]/60 shrink-0" />
             <div className="flex-1 flex items-center gap-1.5 font-label">
               <Package className="w-4 h-4 text-[#705c30] shrink-0" />
-              <span>Stock: <strong className="text-[#2e3230]">{formatNum(product.stock)}</strong></span>
+              <span>Stock: <strong className="text-[#2e3230]">{formatNum(product.stock || 0)}</strong></span>
             </div>
           </div>
         </div>
@@ -118,7 +118,7 @@ export default function ProductSuccessPage() {
           </Button>
 
           <Button
-            onClick={() => router.push('/artisan/products/new/photo')}
+            onClick={() => router.push('/artisan/products/new')}
             variant="secondary"
             fullWidth
             size="md"

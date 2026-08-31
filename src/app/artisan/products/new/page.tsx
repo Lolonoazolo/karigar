@@ -12,6 +12,7 @@ import { useArtisan } from '@/context/ArtisanContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { ProductDataSchema, ProductCategory } from '@/types';
 import { uploadProductImage, createProductWithTranslations } from '@/services/productService';
+import { processProductAI } from '@/services/ai/productProcessor';
 import {
   ArrowLeft,
   Camera,
@@ -37,6 +38,7 @@ export default function AIProductListingPage() {
   const [step, setStep] = useState<number>(1);
 
   const [photoUrl, setPhotoUrl] = useState<string | null>(draft.photo || null);
+  const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
   const [originalDescription, setOriginalDescription] = useState<string>(draft.originalDescription || '');
   const [englishDescription, setEnglishDescription] = useState<string>(draft.description || '');
   const [detectedLanguage, setDetectedLanguage] = useState<string>(draft.originalLanguage || 'hi');
@@ -92,40 +94,41 @@ export default function AIProductListingPage() {
     updateDraft({ photo: null, enhancedPhoto: null });
   };
 
-  // 2. Submit Artisan Description to /api/product-ai/process
+  // 2. Submit Artisan Description to Python AI Backend or Next.js Fallback Route
   const handleDescriptionSubmit = async (descText: string) => {
-    if (!descText.trim()) {
-      showToast('Kripya product ke baare mein kuch likhein ya bolein.');
+    const hasText = Boolean(descText && descText.trim());
+    const hasAudio = Boolean(recordedAudioBlob && recordedAudioBlob.size > 0);
+
+    if (!hasText && !hasAudio) {
+      showToast('Please record your product description or enter it manually.');
       return;
     }
 
     setIsLoading(true);
-    setOriginalDescription(descText.trim());
+    if (hasText) {
+      setOriginalDescription(descText.trim());
+    }
 
     try {
-      const res = await fetch('/api/product-ai/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'process_description',
-          description: descText.trim(),
-          language,
-          imageUrl: photoUrl || undefined,
-          currentProduct: productSchema,
-        }),
+      const data = await processProductAI({
+        action: 'process_description',
+        description: descText.trim(),
+        audioBlob: recordedAudioBlob,
+        language,
+        imageUrl: photoUrl || undefined,
+        currentProduct: productSchema,
+        artisanId: user?.id,
       });
-
-      if (!res.ok) {
-        throw new Error('Failed to process AI listing.');
-      }
-
-      const data = await res.json();
 
       setDetectedLanguage(data.detected_language || language);
       setEnglishDescription(data.english_description || descText);
       setProductSchema(data.product);
       setMissingFields(data.missing_required_fields || []);
       setCurrentNextQuestion(data.next_question || null);
+
+      if (data.original_description) {
+        setOriginalDescription(data.original_description);
+      }
 
       updateDraft({
         name: data.product.product_name || undefined,
@@ -136,7 +139,7 @@ export default function AIProductListingPage() {
         price: data.product.price || undefined,
         stock: data.product.quantity || undefined,
         originalLanguage: data.detected_language,
-        originalDescription: descText.trim(),
+        originalDescription: data.original_description || descText.trim(),
       });
 
       if (data.missing_required_fields && data.missing_required_fields.length > 0) {
@@ -414,17 +417,21 @@ export default function AIProductListingPage() {
                 onTranscriptComplete={(text) => {
                   setOriginalDescription(text);
                 }}
+                onAudioRecorded={(blob, text) => {
+                  setRecordedAudioBlob(blob);
+                  if (text) setOriginalDescription(text);
+                }}
                 promptText="Product ka naam, material, kitne pieces aur keemat boliye..."
               />
 
               <Button
                 onClick={() => handleDescriptionSubmit(originalDescription)}
-                disabled={isLoading || !originalDescription.trim()}
+                disabled={isLoading || (!originalDescription.trim() && !recordedAudioBlob)}
                 fullWidth
                 size="lg"
                 icon={<Sparkles className="w-5 h-5" />}
               >
-                {isLoading ? 'Processing AI Extraction...' : 'Process Product Info ✨'}
+                {isLoading ? 'AI is understanding your product...' : 'Process Product Info ✨'}
               </Button>
             </div>
           </div>

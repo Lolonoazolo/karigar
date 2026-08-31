@@ -3,8 +3,6 @@ import {
   detectLanguage,
   translateDescription,
   extractProductInformation,
-  detectMissingRequiredFields,
-  generateMissingQuestion,
 } from '@/services/ai/productListingAI';
 import { ProductDataSchema } from '@/types';
 
@@ -21,7 +19,6 @@ export async function POST(req: NextRequest) {
     let languageCode = 'hi';
     let artisanId = '';
     let currentProduct: Partial<ProductDataSchema> = {};
-    let missingFieldAnswer: { field: string; answer: string } | null = null;
 
     const contentType = req.headers.get('content-type') || '';
 
@@ -44,22 +41,12 @@ export async function POST(req: NextRequest) {
           // ignore
         }
       }
-
-      const missingAnswerRaw = formData.get('missingFieldAnswer') as string;
-      if (missingAnswerRaw) {
-        try {
-          missingFieldAnswer = JSON.parse(missingAnswerRaw);
-        } catch (e) {
-          // ignore
-        }
-      }
     } else {
       const jsonBody = await req.json().catch(() => ({}));
       descriptionText = jsonBody.description || '';
       languageCode = jsonBody.language || 'hi';
       artisanId = jsonBody.artisanId || '';
       currentProduct = jsonBody.currentProduct || {};
-      missingFieldAnswer = jsonBody.missingFieldAnswer || null;
     }
 
     // 2. Server-to-Server Proxy Call to Python FastAPI Backend (PYTHON_AI_API_URL)
@@ -93,19 +80,33 @@ export async function POST(req: NextRequest) {
         console.log('[Next.js API Bridge] Python AI backend response received successfully.');
 
         const rawProduct = pyData.product || {};
+
+        let parsedPrice: number | null = null;
+        if (rawProduct.price !== undefined && rawProduct.price !== null) {
+          const cleanP = String(rawProduct.price).replace(/[^\d.]/g, '');
+          if (cleanP && !isNaN(Number(cleanP))) {
+            parsedPrice = Number(cleanP);
+          }
+        }
+
+        let parsedQty: number | null = null;
+        const rawQtyVal = rawProduct.quantity !== undefined && rawProduct.quantity !== null ? rawProduct.quantity : rawProduct.stock;
+        if (rawQtyVal !== undefined && rawQtyVal !== null) {
+          const cleanQ = String(rawQtyVal).replace(/[^\d]/g, '');
+          if (cleanQ && !isNaN(Number(cleanQ))) {
+            parsedQty = Number(cleanQ);
+          }
+        }
+
         const extractedProduct: ProductDataSchema = {
           product_name: rawProduct.product_name || rawProduct.name || null,
           category: rawProduct.category || null,
           craft_type: rawProduct.craft_type || rawProduct.craftType || null,
           material: rawProduct.material || null,
           description: rawProduct.description || pyData.english_description || descriptionText || null,
-          price: rawProduct.price !== undefined && rawProduct.price !== null ? Number(rawProduct.price) : null,
+          price: parsedPrice,
           currency: rawProduct.currency || 'INR',
-          quantity: rawProduct.quantity !== undefined && rawProduct.quantity !== null
-            ? Number(rawProduct.quantity)
-            : rawProduct.stock !== undefined && rawProduct.stock !== null
-            ? Number(rawProduct.stock)
-            : null,
+          quantity: parsedQty,
           color: rawProduct.color || null,
           dimensions: rawProduct.dimensions || null,
           weight: rawProduct.weight || null,
@@ -115,17 +116,12 @@ export async function POST(req: NextRequest) {
           tags: rawProduct.tags || [],
         };
 
-        const missingFields = detectMissingRequiredFields(extractedProduct);
-        const nextQuestion = missingFields.length > 0 ? generateMissingQuestion(missingFields[0], languageCode) : null;
-
         return NextResponse.json({
           detected_language: pyData.detected_language || languageCode,
           original_description: pyData.original_description || pyData.transcription || descriptionText,
           english_description: pyData.english_description || extractedProduct.description || descriptionText,
           transcription: pyData.transcription || pyData.original_description || descriptionText,
           product: extractedProduct,
-          missing_required_fields: missingFields,
-          next_question: nextQuestion,
           sku: pyData.sku || rawProduct.sku || `SKU-${Date.now().toString().slice(-6)}`,
           python_backend_success: true,
         });
@@ -141,32 +137,12 @@ export async function POST(req: NextRequest) {
     const englishDesc = await translateDescription(descriptionText, detectedLang);
     const extractedProduct = extractProductInformation(englishDesc, currentProduct);
 
-    if (missingFieldAnswer && missingFieldAnswer.field && missingFieldAnswer.answer) {
-      const field = missingFieldAnswer.field as keyof ProductDataSchema;
-      const ansText = missingFieldAnswer.answer;
-      if (field === 'price' || field === 'quantity' || field === 'production_time_days') {
-        const parsedNum = parseInt(ansText.replace(/\D/g, ''), 10);
-        if (!isNaN(parsedNum)) {
-          (extractedProduct as any)[field] = parsedNum;
-        }
-      } else {
-        (extractedProduct as any)[field] = ansText;
-      }
-    }
-
-    const missingFields = detectMissingRequiredFields(extractedProduct);
-    const nextQuestion = missingFields.length > 0
-      ? generateMissingQuestion(missingFields[0], languageCode)
-      : null;
-
     return NextResponse.json({
       detected_language: detectedLang,
       original_description: descriptionText,
       english_description: englishDesc || descriptionText,
       transcription: descriptionText,
       product: extractedProduct,
-      missing_required_fields: missingFields,
-      next_question: nextQuestion,
       sku: `SKU-${Date.now().toString().slice(-6)}`,
       python_backend_success: false,
     });

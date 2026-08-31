@@ -3,6 +3,7 @@ import { User, Session } from '@supabase/supabase-js';
 
 /**
  * Normalizes phone numbers to standard E.164 format (+919876543210 for India).
+ * Kept for artisan profile storage.
  */
 export function normalizePhoneNumber(phone: string): string {
   if (!phone) return '';
@@ -27,71 +28,121 @@ export function normalizePhoneNumber(phone: string): string {
  * Validates 10-digit Indian mobile numbers or valid E.164 phone numbers.
  */
 export function isValidIndianPhone(phone: string): boolean {
+  if (!phone) return true; // Optional profile field
   const normalized = normalizePhoneNumber(phone);
   const e164Regex = /^\+91[6-9]\d{9}$/;
   return e164Regex.test(normalized);
 }
 
 /**
- * Requests a phone SMS OTP from Supabase.
+ * Registers a new user via Supabase Auth Email + Password.
  */
-export async function sendPhoneOtp(phone: string) {
+export async function signUpWithEmail(
+  email: string,
+  password: string,
+  metadata?: { full_name?: string }
+) {
   if (!isSupabaseConfigured || !supabaseClient) {
-    throw new Error('Supabase client is not configured. Please check environment variables.');
+    throw new Error('KarigarAI Supabase environment variables are missing.');
   }
 
-  const normalizedPhone = normalizePhoneNumber(phone);
-  if (!isValidIndianPhone(normalizedPhone)) {
-    throw new Error('Kripya 10-digit ka sahi Indian mobile number bharein (+91 9XXXX XXXXX).');
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail || !cleanEmail.includes('@')) {
+    throw new Error('कृपया सही ईमेल दर्ज करें।');
   }
 
-  const { data, error } = await supabaseClient.auth.signInWithOtp({
-    phone: normalizedPhone,
+  if (!password || password.length < 6) {
+    throw new Error('पासवर्ड कम से कम 6 अक्षरों का होना चाहिए।');
+  }
+
+  const { data, error } = await supabaseClient.auth.signUp({
+    email: cleanEmail,
+    password: password,
+    options: {
+      data: metadata || {},
+    },
   });
 
   if (error) {
-    console.error('Supabase Phone OTP send error:', error.message);
-    if (error.message.includes('rate limit') || error.status === 429) {
-      throw new Error('Kripya naya OTP mangwane se pehle thoda intezar karein.');
+    console.error('Supabase Auth SignUp error:', error.message);
+    const msg = error.message.toLowerCase();
+    if (msg.includes('already registered') || msg.includes('user_already_exists')) {
+      throw new Error('इस ईमेल से खाता पहले से मौजूद है। कृपया लॉग इन करें।');
+    } else if (msg.includes('weak') || msg.includes('at least 6 characters')) {
+      throw new Error('पासवर्ड कम से कम 6 अक्षरों का होना चाहिए।');
     }
-    throw new Error(error.message || 'OTP bhejane mein samasya aayi. Kripya punah prayas karein.');
+    throw new Error(error.message || 'खाता बनाने में समस्या हुई। कृपया फिर कोशिश करें।');
   }
 
   return data;
 }
 
 /**
- * Verifies the 6-digit SMS OTP using Supabase Auth.
+ * Authenticates an existing user via Supabase Auth Email + Password.
  */
-export async function verifyPhoneOtp(phone: string, token: string) {
+export async function signInWithEmail(email: string, password: string) {
   if (!isSupabaseConfigured || !supabaseClient) {
-    throw new Error('Supabase client is not configured. Please check environment variables.');
+    throw new Error('KarigarAI Supabase environment variables are missing.');
   }
 
-  const normalizedPhone = normalizePhoneNumber(phone);
-  const cleanToken = token.trim();
-
-  if (!cleanToken || cleanToken.length < 6) {
-    throw new Error('Kripya 6-digit ka sahi OTP code bharein.');
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail || !cleanEmail.includes('@')) {
+    throw new Error('कृपया सही ईमेल दर्ज करें।');
   }
 
-  const { data, error } = await supabaseClient.auth.verifyOtp({
-    phone: normalizedPhone,
-    token: cleanToken,
-    type: 'sms',
+  if (!password) {
+    throw new Error('कृपया अपना पासवर्ड दर्ज करें।');
+  }
+
+  const { data, error } = await supabaseClient.auth.signInWithPassword({
+    email: cleanEmail,
+    password: password,
   });
 
   if (error) {
-    console.error('Supabase Phone OTP verify error:', error.message);
-    if (error.message.toLowerCase().includes('expired')) {
-      throw new Error('Yeh OTP expire ho gaya hai. Kripya naya OTP mangwayein.');
+    console.error('Supabase Auth SignIn error:', error.message);
+    const msg = error.message.toLowerCase();
+    if (msg.includes('invalid login credentials') || msg.includes('invalid_credentials')) {
+      throw new Error('ईमेल या पासवर्ड सही नहीं है।');
+    } else if (msg.includes('email not confirmed')) {
+      throw new Error('कृपया अपने ईमेल पर verification link खोलें और अकाउंट verify करें।');
     }
-    throw new Error('Yeh OTP code galat hai. Kripya punah dekhkar bharein.');
+    throw new Error(error.message || 'लॉग इन करने में समस्या आई। कृपया फिर कोशिश करें।');
   }
 
   return data;
 }
 
+/**
+ * Triggers Supabase password reset email.
+ */
+export async function resetPasswordForEmail(email: string) {
+  if (!isSupabaseConfigured || !supabaseClient) {
+    throw new Error('KarigarAI Supabase environment variables are missing.');
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail || !cleanEmail.includes('@')) {
+    throw new Error('कृपया सही ईमेल दर्ज करें।');
+  }
+
+  const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/reset-password` : undefined;
+
+  const { data, error } = await supabaseClient.auth.resetPasswordForEmail(cleanEmail, {
+    redirectTo: redirectUrl,
+  });
+
+  if (error) {
+    console.error('Supabase Reset Password error:', error.message);
+    throw new Error(error.message || 'पासवर्ड रीसेट ईमेल भेजने में समस्या आई।');
+  }
+
+  return data;
+}
+
+/**
+ * Signs out current Supabase user session.
+ */
 export async function signOut() {
   if (!isSupabaseConfigured || !supabaseClient) return;
   const { error } = await supabaseClient.auth.signOut();
@@ -101,26 +152,39 @@ export async function signOut() {
   }
 }
 
+/**
+ * Returns current authenticated Supabase user.
+ */
 export async function getCurrentUser(): Promise<User | null> {
   if (!isSupabaseConfigured || !supabaseClient) return null;
   const { data: { user }, error } = await supabaseClient.auth.getUser();
   if (error) {
-    console.error('Failed to fetch current Supabase user:', error.message);
+    if (!error.message.includes('Auth session missing') && !error.message.includes('session_not_found')) {
+      console.warn('Current Supabase user status:', error.message);
+    }
     return null;
   }
   return user;
 }
 
+/**
+ * Returns current active Supabase session.
+ */
 export async function getCurrentSession(): Promise<Session | null> {
   if (!isSupabaseConfigured || !supabaseClient) return null;
   const { data: { session }, error } = await supabaseClient.auth.getSession();
   if (error) {
-    console.error('Failed to fetch current Supabase session:', error.message);
+    if (!error.message.includes('Auth session missing') && !error.message.includes('session_not_found')) {
+      console.warn('Current Supabase session status:', error.message);
+    }
     return null;
   }
   return session;
 }
 
+/**
+ * Subscribes to real-time Supabase auth state updates (login, logout, token refresh).
+ */
 export function subscribeToAuthChanges(callback: (user: User | null, session: Session | null) => void) {
   if (!isSupabaseConfigured || !supabaseClient) {
     return { unsubscribe: () => {} };

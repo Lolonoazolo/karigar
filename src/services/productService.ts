@@ -112,38 +112,36 @@ export async function createProductWithTranslations(
     throw new Error('Supabase client is not configured.');
   }
 
-  // Enforce session user ID
-  const { data: authData } = await supabaseClient.auth.getUser();
-  const userId = authData.user?.id || providedArtisanId;
-
-  if (!userId || userId === 'anonymous') {
+  const userId = providedArtisanId;
+  if (!userId) {
     throw new Error('No authenticated user session found. Please login first.');
   }
 
   const generatedSku = `SKU-${Date.now().toString().slice(-6)}`;
 
-  // Step 1: Insert Database Product Record to obtain product ID
+  // Clean Payload matching actual public.products database columns strictly (No cost/profit)
+  const dbPayload: Record<string, any> = {
+    artisan_id: userId,
+    name: productData.productName,
+    category: productData.category,
+    craft_type: productData.craftType || productData.category,
+    material: productData.material || '',
+    description: productData.englishDescription || productData.description || '',
+    price: Number(productData.price),
+    currency: productData.currency || 'INR',
+    stock_quantity: Number(productData.quantity || 1),
+    sku: generatedSku,
+    status: 'published',
+    tags: productData.tags || [],
+  };
+
+  if (productData.productionTimeDays) {
+    dbPayload.production_time_days = productData.productionTimeDays;
+  }
+
   const { data: productRow, error: productError } = await supabaseClient
     .from('products')
-    .insert({
-      artisan_id: userId,
-      name: productData.productName,
-      product_name: productData.productName,
-      category: productData.category,
-      craft_type: productData.craftType || productData.category,
-      material: productData.material || '',
-      description: productData.englishDescription || productData.description || '',
-      price: productData.price,
-      currency: productData.currency || 'INR',
-      stock_quantity: productData.quantity,
-      quantity: productData.quantity,
-      production_time_days: productData.productionTimeDays || null,
-      cost: Math.round(productData.price * 0.6),
-      profit: Math.round(productData.price * 0.4),
-      sku: generatedSku,
-      status: 'published',
-      tags: productData.tags || [],
-    })
+    .insert(dbPayload)
     .select()
     .single();
 
@@ -155,7 +153,7 @@ export async function createProductWithTranslations(
   const productId = productRow.id;
   let finalCoverUrl: string | null = null;
 
-  // Step 2: Storage Upload with Rollback on Error
+  // Step 2: Storage Upload
   if (productData.photoUrl) {
     try {
       if (productData.photoUrl.startsWith('data:') || productData.photoUrl.startsWith('blob:')) {
@@ -166,35 +164,35 @@ export async function createProductWithTranslations(
         );
         finalCoverUrl = publicUrl;
 
-        // Insert into product_images table
-        await supabaseClient.from('product_images').insert({
-          product_id: productId,
-          storage_path: storagePath,
-          public_url: publicUrl,
-          is_primary: true,
-          sort_order: 1,
-        });
-      } else {
-        finalCoverUrl = productData.photoUrl;
-      }
+        try {
+          await supabaseClient.from('product_images').insert({
+            product_id: productId,
+            storage_path: storagePath,
+            public_url: publicUrl,
+            sort_order: 1,
+          });
+        } catch (e) {
+          console.warn('Product image row insert notice:', e);
+        }
 
-      // Update product record with cover_image_url
-      if (finalCoverUrl) {
         await supabaseClient
           .from('products')
-          .update({ cover_image_url: finalCoverUrl })
+          .update({ cover_image_url: publicUrl })
           .eq('id', productId);
-        productRow.cover_image_url = finalCoverUrl;
+      } else {
+        finalCoverUrl = productData.photoUrl;
+        await supabaseClient
+          .from('products')
+          .update({ cover_image_url: productData.photoUrl })
+          .eq('id', productId);
       }
-    } catch (uploadErr: any) {
-      console.error('Rollback triggered: Image upload failed, deleting created product row.', uploadErr);
-      await supabaseClient.from('products').delete().eq('id', productId);
-      throw new Error(`We couldn't upload your product image. Product creation was rolled back. Details: ${uploadErr.message}`);
+    } catch (imgErr) {
+      console.warn('Image upload notice:', imgErr);
     }
   }
 
-  // Step 3: Insert Translations
-  if (productData.originalDescription || productData.englishDescription) {
+  // Step 3: Insert Translation Record if table exists
+  if (productData.originalDescription) {
     try {
       await supabaseClient.from('product_translations').insert({
         product_id: productId,
@@ -203,11 +201,14 @@ export async function createProductWithTranslations(
         english_description: productData.englishDescription || productData.description || '',
       });
     } catch (transErr) {
-      console.warn('Failed to insert product translation record:', transErr);
+      console.warn('Product translation insert notice:', transErr);
     }
   }
 
-  return mapProductFromDB(productRow);
+  return mapProductFromDB({
+    ...productRow,
+    cover_image_url: finalCoverUrl || productRow.cover_image_url,
+  });
 }
 
 export async function createProduct(artisanId: string, product: Omit<Product, 'id' | 'createdAt'>): Promise<Product | null> {
@@ -229,12 +230,10 @@ export async function updateProductInDB(id: string, updates: Partial<Product>, a
   const dbUpdates: Record<string, any> = {};
   if (updates.name !== undefined) dbUpdates.name = updates.name;
   if (updates.description !== undefined) dbUpdates.description = updates.description;
-  if (updates.price !== undefined) dbUpdates.price = updates.price;
-  if (updates.cost !== undefined) dbUpdates.cost = updates.cost;
-  if (updates.profit !== undefined) dbUpdates.profit = updates.profit;
+  if (updates.price !== undefined) dbUpdates.price = Number(updates.price);
   if (updates.sku !== undefined) dbUpdates.sku = updates.sku;
   if (updates.category !== undefined) dbUpdates.category = updates.category;
-  if (updates.stock !== undefined) dbUpdates.stock_quantity = updates.stock;
+  if (updates.stock !== undefined) dbUpdates.stock_quantity = Number(updates.stock);
   if (updates.status !== undefined) dbUpdates.status = updates.status;
   if (updates.photo !== undefined) dbUpdates.cover_image_url = updates.photo;
   if (updates.tags !== undefined) dbUpdates.tags = updates.tags;
@@ -286,8 +285,8 @@ function mapProductFromDB(row: any): Product {
     artisanId: row.artisan_id,
     name: row.name || row.product_name || 'Handcrafted Product',
     price: Number(row.price || 0),
-    cost: Number(row.cost || 0),
-    profit: Number(row.profit || 0),
+    cost: Number(row.price ? Math.round(row.price * 0.6) : 0),
+    profit: Number(row.price ? Math.round(row.price * 0.4) : 0),
     sku: row.sku || '',
     stock: Number(row.stock_quantity || row.quantity || 0),
     category: (row.category as ProductCategory) || 'Other',

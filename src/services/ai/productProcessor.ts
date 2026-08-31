@@ -6,8 +6,6 @@ export type ProductAIProcessResponse = {
   original_description: string;
   transcription?: string;
   product: ProductDataSchema;
-  missing_required_fields: string[];
-  next_question?: string | null;
   sku?: string;
   success?: boolean;
 };
@@ -20,7 +18,6 @@ export type ProcessProductAIParams = {
   language?: string;
   imageUrl?: string;
   currentProduct?: Partial<ProductDataSchema>;
-  missingFieldAnswer?: { field: string; answer: string };
   artisanId?: string;
 };
 
@@ -31,14 +28,14 @@ export type ProcessProductAIParams = {
 export async function processProductAI(
   params: ProcessProductAIParams
 ): Promise<ProductAIProcessResponse> {
-  const { audioBlob, textDescription, description, language, imageUrl, currentProduct, missingFieldAnswer, artisanId, action } = params;
+  const { audioBlob, textDescription, description, language, imageUrl, currentProduct, artisanId, action } = params;
 
   const targetDesc = (textDescription || description || '').trim();
   const hasAudio = Boolean(audioBlob && audioBlob.size > 0);
   const hasText = Boolean(targetDesc);
 
-  if (!hasAudio && !hasText && !missingFieldAnswer) {
-    throw new Error('Please record your product description or enter it manually.');
+  if (!hasAudio && !hasText) {
+    throw new Error('कृपया अपनी उत्पाद जानकारी बोलें या लिखें।');
   }
 
   const formData = new FormData();
@@ -69,10 +66,6 @@ export async function processProductAI(
     formData.append('currentProduct', JSON.stringify(currentProduct));
   }
 
-  if (missingFieldAnswer) {
-    formData.append('missingFieldAnswer', JSON.stringify(missingFieldAnswer));
-  }
-
   const res = await fetch('/api/product-ai/process', {
     method: 'POST',
     body: formData,
@@ -84,25 +77,45 @@ export async function processProductAI(
   }
 
   const data = await res.json();
-  return normalizeProductAIResponse(data, textDescription || '');
+  return normalizeProductAIResponse(data, targetDesc);
 }
 
 function normalizeProductAIResponse(data: any, fallbackDesc: string): ProductAIProcessResponse {
   const rawProduct = data.product || {};
 
+  // Extract Price robustly
+  let parsedPrice: number | null = null;
+  if (rawProduct.price !== undefined && rawProduct.price !== null) {
+    const cleanP = String(rawProduct.price).replace(/[^\d.]/g, '');
+    if (cleanP && !isNaN(Number(cleanP))) {
+      parsedPrice = Number(cleanP);
+    }
+  }
+
+  // Extract Quantity robustly
+  let parsedQty: number | null = null;
+  const rawQ = rawProduct.quantity !== undefined && rawProduct.quantity !== null ? rawProduct.quantity : rawProduct.stock;
+  if (rawQ !== undefined && rawQ !== null) {
+    const cleanQ = String(rawQ).replace(/[^\d]/g, '');
+    if (cleanQ && !isNaN(Number(cleanQ))) {
+      parsedQty = Number(cleanQ);
+    }
+  }
+
+  let rawName = rawProduct.product_name || rawProduct.name || rawProduct.title || null;
+  if (rawName && (rawName.length > 50 || rawName.startsWith('यह') || rawName.toLowerCase().startsWith('this is'))) {
+    rawName = null;
+  }
+
   const product: ProductDataSchema = {
-    product_name: rawProduct.product_name || rawProduct.name || rawProduct.title || null,
+    product_name: rawName,
     category: rawProduct.category || null,
     craft_type: rawProduct.craft_type || rawProduct.craftType || null,
     material: rawProduct.material || null,
     description: rawProduct.description || data.english_description || fallbackDesc || null,
-    price: rawProduct.price !== undefined && rawProduct.price !== null ? Number(rawProduct.price) : null,
+    price: parsedPrice,
     currency: rawProduct.currency || 'INR',
-    quantity: rawProduct.quantity !== undefined && rawProduct.quantity !== null
-      ? Number(rawProduct.quantity)
-      : rawProduct.stock !== undefined && rawProduct.stock !== null
-      ? Number(rawProduct.stock)
-      : null,
+    quantity: parsedQty,
     color: rawProduct.color || null,
     dimensions: rawProduct.dimensions || null,
     weight: rawProduct.weight || null,
@@ -112,9 +125,6 @@ function normalizeProductAIResponse(data: any, fallbackDesc: string): ProductAIP
     tags: rawProduct.tags || [],
   };
 
-  const missingFields = detectMissingRequiredFields(product);
-  const nextQuestion = missingFields.length > 0 ? getMissingFieldQuestion(missingFields[0]) : null;
-
   return {
     success: true,
     detected_language: data.detected_language || data.language_code || 'hi',
@@ -122,33 +132,6 @@ function normalizeProductAIResponse(data: any, fallbackDesc: string): ProductAIP
     english_description: data.english_description || product.description || fallbackDesc,
     transcription: data.transcription || data.original_description || fallbackDesc,
     product,
-    missing_required_fields: missingFields,
-    next_question: nextQuestion,
     sku: data.sku || rawProduct.sku || `SKU-${Date.now().toString().slice(-6)}`,
   };
-}
-
-function detectMissingRequiredFields(product: ProductDataSchema): string[] {
-  const missing: string[] = [];
-  if (!product.product_name || !product.product_name.trim()) missing.push('product_name');
-  if (!product.category || !product.category.trim()) missing.push('category');
-  if (!product.craft_type || !product.craft_type.trim()) missing.push('craft_type');
-  if (!product.material || !product.material.trim()) missing.push('material');
-  if (!product.description || !product.description.trim()) missing.push('description');
-  if (product.price === null || product.price === undefined || isNaN(product.price) || product.price <= 0) missing.push('price');
-  if (product.quantity === null || product.quantity === undefined || isNaN(product.quantity) || product.quantity <= 0) missing.push('quantity');
-  return missing;
-}
-
-function getMissingFieldQuestion(field: string): string {
-  const questions: Record<string, string> = {
-    product_name: 'Yeh product kya hai? (Product Ka Naam)',
-    category: 'Yeh kis category mein aata hai?',
-    craft_type: 'Yeh kis craft/kala se bana hai?',
-    material: 'Yeh kis material se bana hai?',
-    description: 'Is product ki thodi jankari batayein.',
-    price: 'Ek piece ki keemat kitni hai? (Price in ₹)',
-    quantity: 'Abhi kitne pieces available hain?',
-  };
-  return questions[field] || 'Kripya is field ki jankari batayein.';
 }

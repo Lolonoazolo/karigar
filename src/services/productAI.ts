@@ -110,15 +110,32 @@ export async function processProductAI(
 function normalizeResponse(raw: any, fallbackDesc: string): ProductAIProcessResponse {
   const prod = raw.product || {};
 
+  let parsedPrice: number | null = null;
+  if (prod.price !== undefined && prod.price !== null) {
+    const cleanP = String(prod.price).replace(/[^\d.]/g, '');
+    if (cleanP && !isNaN(Number(cleanP))) {
+      parsedPrice = Number(cleanP);
+    }
+  }
+
+  let parsedQty: number | null = null;
+  const rawQ = prod.quantity !== undefined && prod.quantity !== null ? prod.quantity : prod.stock;
+  if (rawQ !== undefined && rawQ !== null) {
+    const cleanQ = String(rawQ).replace(/[^\d]/g, '');
+    if (cleanQ && !isNaN(Number(cleanQ))) {
+      parsedQty = Number(cleanQ);
+    }
+  }
+
   const normalizedProduct: ProductDataSchema = {
     product_name: prod.product_name || prod.name || prod.title || null,
     category: prod.category || null,
     craft_type: prod.craft_type || prod.craftType || null,
     material: prod.material || null,
     description: prod.description || raw.english_description || fallbackDesc || null,
-    price: prod.price ? Number(prod.price) : null,
+    price: parsedPrice,
     currency: prod.currency || 'INR',
-    quantity: prod.quantity !== undefined ? Number(prod.quantity) : prod.stock !== undefined ? Number(prod.stock) : null,
+    quantity: parsedQty,
     color: prod.color || null,
     dimensions: prod.dimensions || null,
     weight: prod.weight || null,

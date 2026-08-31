@@ -59,22 +59,21 @@ export const ArtisanProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     try {
-      const profile = await getProfile(sbUser.id);
       const artisan = await getArtisanProfile(sbUser.id);
 
       const artisanUser: ArtisanUser = {
         id: sbUser.id,
         email: sbUser.email || '',
-        mobile: profile?.phone || sbUser.phone || '',
-        name: profile?.full_name || sbUser.user_metadata?.full_name || t('common.karigar'),
-        shop: profile?.craft || artisan?.craft_type || 'Artisan Shop',
-        craft: profile?.craft || artisan?.craft_type || 'Handicrafts',
-        location: profile?.location || artisan?.location || 'India',
-        lang: profile?.preferred_language || language,
-        bio: profile?.bio || artisan?.bio || '',
-        role: profile?.role || 'artisan',
+        mobile: artisan?.phone || sbUser.phone || sbUser.user_metadata?.mobile || '',
+        name: artisan?.name || artisan?.nam || sbUser.user_metadata?.full_name || sbUser.user_metadata?.name || t('common.karigar'),
+        shop: artisan?.craft_type || artisan?.shop || 'Artisan Shop',
+        craft: artisan?.craft_type || artisan?.craft || 'Handicrafts',
+        location: artisan?.location || 'India',
+        lang: artisan?.language || language,
+        bio: artisan?.bio || '',
+        role: 'artisan',
         artisanId: sbUser.id,
-        avatarUrl: profile?.avatar_url || undefined,
+        avatarUrl: artisan?.avatar_url || undefined,
       };
 
       setUser(artisanUser);

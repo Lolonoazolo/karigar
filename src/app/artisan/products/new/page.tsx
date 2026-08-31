@@ -11,7 +11,7 @@ import { useProductDraft } from '@/context/ProductDraftContext';
 import { useArtisan } from '@/context/ArtisanContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { ProductDataSchema, ProductCategory } from '@/types';
-import { uploadProductImage, createProductWithTranslations } from '@/services/productService';
+import { createProductWithTranslations } from '@/services/productService';
 import { processProductAI } from '@/services/ai/productProcessor';
 import {
   ArrowLeft,
@@ -20,13 +20,64 @@ import {
   RotateCcw,
   CheckCircle2,
   Sparkles,
-  Edit3,
   Trash2,
   ArrowRight,
-  Check,
   Globe,
-  HelpCircle,
+  Lightbulb,
+  ChevronDown,
 } from 'lucide-react';
+
+type GuidanceContent = {
+  header: string;
+  body: string;
+  toggleBtn: string;
+  example: string;
+  placeholder: string;
+  processBtn: string;
+};
+
+const GUIDANCE_DICTIONARY: Record<string, GuidanceContent> = {
+  hindi: {
+    header: '💡 ऐसे बोलें:',
+    body: 'उत्पाद का नाम, इसे बनाने की कला और सामग्री, कीमत, कितने पीस हैं और इसकी खासियत बताएं।',
+    toggleBtn: 'उदाहरण देखें',
+    example: 'यह बनारसी सिल्क की साड़ी है, जिसे मैंने हाथ से बनाया है। यह शुद्ध सिल्क की है, इसकी कीमत 2500 रुपये है और मेरे पास 5 पीस हैं।',
+    placeholder: 'जैसे: यह बनारसी सिल्क की साड़ी है, जिसकी कीमत 2500 रुपये है...',
+    processBtn: 'जानकारी प्रोसेस करें ✨',
+  },
+  hi: {
+    header: '💡 ऐसे बोलें:',
+    body: 'उत्पाद का नाम, इसे बनाने की कला और सामग्री, कीमत, कितने पीस हैं और इसकी खासियत बताएं।',
+    toggleBtn: 'उदाहरण देखें',
+    example: 'यह बनारसी सिल्क की साड़ी है, जिसे मैंने हाथ से बनाया है। यह शुद्ध सिल्क की है, इसकी कीमत 2500 रुपये है और मेरे पास 5 पीस हैं।',
+    placeholder: 'जैसे: यह बनारसी सिल्क की साड़ी है, जिसकी कीमत 2500 रुपये है...',
+    processBtn: 'जानकारी प्रोसेस करें ✨',
+  },
+  english: {
+    header: '💡 Try saying:',
+    body: 'Tell us the product name, craft and material, price, quantity, and what makes it special.',
+    toggleBtn: 'See example',
+    example: 'This is a handmade Banarasi silk saree. It is made from pure silk, costs ₹2500, and I have 5 pieces available.',
+    placeholder: 'Example: This is a handmade Banarasi silk saree priced at ₹2500...',
+    processBtn: 'Process Information ✨',
+  },
+  en: {
+    header: '💡 Try saying:',
+    body: 'Tell us the product name, craft and material, price, quantity, and what makes it special.',
+    toggleBtn: 'See example',
+    example: 'This is a handmade Banarasi silk saree. It is made from pure silk, costs ₹2500, and I have 5 pieces available.',
+    placeholder: 'Example: This is a handmade Banarasi silk saree priced at ₹2500...',
+    processBtn: 'Process Information ✨',
+  },
+  hinglish: {
+    header: '💡 Aise bol sakte hain:',
+    body: 'Product ka naam, kis kala se bana hai, material, price, kitne pieces hain aur iski khasiyat bataiye.',
+    toggleBtn: 'Example dekhein',
+    example: 'Ye Banarasi silk ki saree hai, ise maine haath se banaya hai. Ye pure silk ki hai, iska price 2500 rupaye hai aur mere paas 5 pieces hain.',
+    placeholder: 'Jaise: Ye Banarasi silk ki saree hai, iski keemat 2500 rupaye hai...',
+    processBtn: 'Jankari Process Karein ✨',
+  },
+};
 
 export default function AIProductListingPage() {
   const router = useRouter();
@@ -34,8 +85,13 @@ export default function AIProductListingPage() {
   const { user, showToast, refreshProducts } = useArtisan();
   const { t, language } = useLanguage();
 
-  // Wizard Steps: 1 = Photo, 2 = Description, 3 = Missing Questions, 4 = Preview & Edit
+  // Active Guidance Dict
+  const langKey = String(language);
+  const guidance = GUIDANCE_DICTIONARY[langKey] || GUIDANCE_DICTIONARY.hindi;
+
+  // Wizard Steps: 1 = Photo, 2 = Description, 3 = Review & Edit Form
   const [step, setStep] = useState<number>(1);
+  const [showExample, setShowExample] = useState<boolean>(false);
 
   const [photoUrl, setPhotoUrl] = useState<string | null>(draft.photo || null);
   const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
@@ -61,17 +117,12 @@ export default function AIProductListingPage() {
     tags: draft.tags || [],
   });
 
-  const [missingFields, setMissingFields] = useState<string[]>([]);
-  const [currentNextQuestion, setCurrentNextQuestion] = useState<string | null>(null);
-  const [missingAnswerInput, setMissingAnswerInput] = useState<string>('');
-
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isEditing, setIsEditing] = useState<boolean>(false);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  // 1. Photo Upload Handler
+  // 1. Photo Selection Handler
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -83,7 +134,7 @@ export default function AIProductListingPage() {
       setPhotoUrl(url);
       updateDraft({ photo: url, enhancedPhoto: url });
       setIsLoading(false);
-      showToast('Product photo add ho gayi!');
+      showToast('Product photo select ho gayi!');
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -94,13 +145,13 @@ export default function AIProductListingPage() {
     updateDraft({ photo: null, enhancedPhoto: null });
   };
 
-  // 2. Submit Artisan Description to Python AI Backend or Next.js Fallback Route
+  // 2. Submit Complete Description to AI Processing Pipeline
   const handleDescriptionSubmit = async (descText: string) => {
     const hasText = Boolean(descText && descText.trim());
     const hasAudio = Boolean(recordedAudioBlob && recordedAudioBlob.size > 0);
 
     if (!hasText && !hasAudio) {
-      showToast('Please record your product description or enter it manually.');
+      showToast('कृपया अपनी उत्पाद जानकारी बोलें या लिखें।');
       return;
     }
 
@@ -114,17 +165,15 @@ export default function AIProductListingPage() {
         action: 'process_description',
         description: descText.trim(),
         audioBlob: recordedAudioBlob,
-        language,
+        language: String(language),
         imageUrl: photoUrl || undefined,
         currentProduct: productSchema,
         artisanId: user?.id,
       });
 
-      setDetectedLanguage(data.detected_language || language);
-      setEnglishDescription(data.english_description || descText);
+      setDetectedLanguage(data.detected_language || String(language));
+      setEnglishDescription(data.english_description || descText.trim());
       setProductSchema(data.product);
-      setMissingFields(data.missing_required_fields || []);
-      setCurrentNextQuestion(data.next_question || null);
 
       if (data.original_description) {
         setOriginalDescription(data.original_description);
@@ -138,15 +187,13 @@ export default function AIProductListingPage() {
         description: data.english_description || undefined,
         price: data.product.price || undefined,
         stock: data.product.quantity || undefined,
+        color: data.product.color || undefined,
         originalLanguage: data.detected_language,
         originalDescription: data.original_description || descText.trim(),
       });
 
-      if (data.missing_required_fields && data.missing_required_fields.length > 0) {
-        setStep(3);
-      } else {
-        setStep(4);
-      }
+      // DIRECT ROUTE TO REVIEW & EDIT FORM (No question interview loop!)
+      setStep(3);
     } catch (err: any) {
       showToast(err.message || 'AI processing error. Kripya punah prayas karein.');
     } finally {
@@ -154,53 +201,10 @@ export default function AIProductListingPage() {
     }
   };
 
-  // 3. Submit Missing Field Answer to /api/product-ai/process
-  const handleMissingAnswerSubmit = async (answerText: string) => {
-    if (!answerText.trim() || missingFields.length === 0) return;
-
-    setIsLoading(true);
-    const targetField = missingFields[0];
-
-    try {
-      const res = await fetch('/api/product-ai/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'answer_missing',
-          description: originalDescription,
-          language: detectedLanguage,
-          currentProduct: productSchema,
-          missingFieldAnswer: { field: targetField, answer: answerText.trim() },
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to update missing information.');
-      }
-
-      const data = await res.json();
-
-      setProductSchema(data.product);
-      setMissingFields(data.missing_required_fields || []);
-      setCurrentNextQuestion(data.next_question || null);
-      setMissingAnswerInput('');
-
-      if (data.missing_required_fields && data.missing_required_fields.length > 0) {
-        setStep(3);
-      } else {
-        setStep(4);
-      }
-    } catch (err: any) {
-      showToast(err.message || 'Information update error.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // 4. Confirm & Save to Supabase Database & Storage
+  // 3. Confirm & Save Product to KarigarAI Supabase Database
   const handleConfirmAndSave = async () => {
-    if (!productSchema.product_name || !productSchema.price || !productSchema.quantity) {
-      showToast('Kripya sabhi zaroori jankari puri karein.');
+    if (!productSchema.product_name || !productSchema.price) {
+      showToast('कृपया कम से कम उत्पाद का नाम और कीमत भरें।');
       return;
     }
 
@@ -217,10 +221,10 @@ export default function AIProductListingPage() {
         category: productSchema.category || 'Handmade',
         craftType: productSchema.craft_type || productSchema.category || 'Craft',
         material: productSchema.material || 'Handmade Material',
-        description: englishDescription || productSchema.description || '',
+        description: englishDescription || productSchema.description || originalDescription || '',
         price: Number(productSchema.price),
         currency: productSchema.currency || 'INR',
-        quantity: Number(productSchema.quantity),
+        quantity: productSchema.quantity ? Number(productSchema.quantity) : 1,
         productionTimeDays: productSchema.production_time_days || undefined,
         photoUrl: photoUrl,
         tags: productSchema.tags || [productSchema.material || 'Handmade'],
@@ -233,13 +237,13 @@ export default function AIProductListingPage() {
         await refreshProducts();
         setLastSavedProduct(savedProduct as any);
         resetDraft();
-        showToast('Product added successfully!');
+        showToast('Product successfully saved!');
         router.push('/artisan/products/success');
       } else {
-        showToast('Product save karne mein samasya aayi.');
+        showToast('Product save करने में समस्या आई।');
       }
     } catch (err: any) {
-      showToast(err.message || 'Product save karne mein truti aayi.');
+      showToast(err.message || 'Product save करने में त्रुटि आई।');
     } finally {
       setIsLoading(false);
     }
@@ -252,7 +256,13 @@ export default function AIProductListingPage() {
       {/* Header */}
       <header className="px-5 py-3.5 flex items-center justify-between border-b border-[#c4c8bc]/30 sticky top-0 bg-[#faf6f0] z-20">
         <button
-          onClick={() => router.push('/artisan/products')}
+          onClick={() => {
+            if (step > 1) {
+              setStep(step - 1);
+            } else {
+              router.push('/artisan/products');
+            }
+          }}
           className="p-2 -ml-2 rounded-full hover:bg-[#f0ece4] text-[#2e3230] transition-colors"
           aria-label="Back"
         >
@@ -265,10 +275,10 @@ export default function AIProductListingPage() {
           </div>
           <div>
             <h1 className="font-headline font-bold text-base text-[#4a7c59] leading-none">
-              AI Product Listing
+              KarigarAI Product Wizard
             </h1>
             <span className="font-label text-[10px] font-semibold text-[#6b6358]">
-              Step {step} of 4
+              Step {step} of 3
             </span>
           </div>
         </div>
@@ -276,17 +286,17 @@ export default function AIProductListingPage() {
         <div className="w-8" />
       </header>
 
-      {/* Main Flow Content */}
+      {/* Main Content */}
       <main className="flex-1 flex flex-col px-5 py-5 space-y-5 overflow-y-auto pb-12">
         {/* STEP 1: Add Product Photo */}
         {step === 1 && (
           <div className="space-y-4 animate-fade-in">
             <div className="space-y-1 text-center">
               <h2 className="font-headline font-extrabold text-xl text-[#2e3230]">
-                Let&apos;s add your product
+                उत्पाद की फ़ोटो जोड़ें 📸
               </h2>
               <p className="font-label text-xs text-[#6b6358]">
-                Sabse pehle apne product ki photo lein ya gallery se chunein.
+                सबसे पहले अपने उत्पाद की फ़ोटो लें या गैलरी से चुनें।
               </p>
             </div>
 
@@ -301,9 +311,9 @@ export default function AIProductListingPage() {
                     <Camera className="w-8 h-8" />
                   </div>
                   <span className="font-headline font-bold text-base text-[#2e3230]">
-                    📸 Take a photo
+                    📸 फ़ोटो खींचें
                   </span>
-                  <span className="font-label text-xs text-[#6b6358]">Tap camera to capture</span>
+                  <span className="font-label text-xs text-[#6b6358]">कैमरा से फ़ोटो लें</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -313,7 +323,7 @@ export default function AIProductListingPage() {
                     size="md"
                     icon={<Camera className="w-4 h-4" />}
                   >
-                    Camera
+                    कैमरा
                   </Button>
                   <Button
                     onClick={() => galleryInputRef.current?.click()}
@@ -322,7 +332,7 @@ export default function AIProductListingPage() {
                     size="md"
                     icon={<ImageIcon className="w-4 h-4 text-[#4a7c59]" />}
                   >
-                    Gallery
+                    गैलरी
                   </Button>
                 </div>
               </div>
@@ -346,7 +356,7 @@ export default function AIProductListingPage() {
                     className="flex-1 py-2.5 px-3 bg-[#f5f1ea] hover:bg-[#eae6de] text-[#4a4e4a] rounded-xl font-label text-xs font-bold border border-[#c4c8bc]/40 flex items-center justify-center gap-1.5"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Replace Photo</span>
+                    <span>फ़ोटो बदलें</span>
                   </button>
                   <Button
                     onClick={() => setStep(2)}
@@ -354,7 +364,7 @@ export default function AIProductListingPage() {
                     className="flex-1"
                     icon={<ArrowRight className="w-4 h-4 rtl-flip" />}
                   >
-                    Next: Description
+                    आगे बढ़ें: विवरण →
                   </Button>
                 </div>
               </div>
@@ -379,36 +389,65 @@ export default function AIProductListingPage() {
           onChange={handlePhotoSelect}
         />
 
-        {/* STEP 2: Ask Artisan for Description */}
+        {/* STEP 2: Complete Description Input with Compact Guidance Card */}
         {step === 2 && (
           <div className="space-y-4 animate-fade-in">
             <div className="space-y-1 text-center">
               <h2 className="font-headline font-extrabold text-xl text-[#2e3230]">
-                Tell me about this product
+                उत्पाद के बारे में बताएँ 🎙️
               </h2>
               <p className="font-label text-xs text-[#6b6358]">
-                You can speak or type in your own language.
+                आप अपनी भाषा में बोलकर या लिखकर पूरी जानकारी दे सकते हैं।
               </p>
             </div>
 
             {/* Photo Thumbnail */}
             {photoUrl && (
-              <div className="h-32 rounded-2xl overflow-hidden bg-[#f0ece4] soft-shadow border border-[#c4c8bc]/30">
+              <div className="h-28 rounded-2xl overflow-hidden bg-[#f0ece4] soft-shadow border border-[#c4c8bc]/30">
                 <img src={photoUrl} alt="Product" className="w-full h-full object-cover" />
               </div>
             )}
 
-            {/* Description Form */}
+            {/* COMPACT LANGUAGE-AWARE GUIDANCE CARD */}
+            <div className="bg-[#faf6f0] p-4 rounded-2xl border border-[#c4c8bc]/40 space-y-2 text-xs">
+              <div className="flex items-center gap-1.5 font-headline font-bold text-[#4a7c59]">
+                <Lightbulb className="w-4 h-4 text-[#e5a93c]" />
+                <span>{guidance.header}</span>
+              </div>
+              <p className="font-body text-[#2e3230] leading-relaxed">
+                {guidance.body}
+              </p>
+
+              {/* Expandable / Collapsible Example Toggle */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowExample(!showExample)}
+                  className="text-[11px] font-headline font-bold text-[#4a7c59] hover:underline flex items-center gap-1"
+                >
+                  <span>{guidance.toggleBtn}</span>
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showExample ? 'rotate-180' : ''}`} />
+                </button>
+
+                {showExample && (
+                  <div className="mt-2 bg-white p-3 rounded-xl border border-[#c4c8bc]/30 text-xs text-[#4a4e4a] italic leading-relaxed animate-fade-in">
+                    &quot;{guidance.example}&quot;
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Description Input Card */}
             <div className="bg-white p-5 rounded-3xl border border-[#c4c8bc]/40 soft-shadow space-y-4">
               <div className="flex items-center gap-1.5 text-xs font-label font-bold text-[#4a7c59] bg-[#d8f0de] px-3 py-1 rounded-full w-fit">
                 <Globe className="w-3.5 h-3.5" />
-                <span>Regional Language Supported</span>
+                <span>हिंदी एवं क्षेत्रीय भाषा supported</span>
               </div>
 
               <textarea
                 value={originalDescription}
                 onChange={(e) => setOriginalDescription(e.target.value)}
-                placeholder="Jaise: Yeh banarasi silk ki saree hai. Iski keemat 2500 rupaye hai..."
+                placeholder={guidance.placeholder}
                 rows={4}
                 className="w-full bg-[#faf6f0] border border-[#c4c8bc]/50 rounded-2xl p-4 text-sm text-[#2e3230] font-body focus:ring-2 focus:ring-[#4a7c59] focus:outline-none"
               />
@@ -421,7 +460,7 @@ export default function AIProductListingPage() {
                   setRecordedAudioBlob(blob);
                   if (text) setOriginalDescription(text);
                 }}
-                promptText="Product ka naam, material, kitne pieces aur keemat boliye..."
+                promptText="माइक दबाकर बोलना शुरू करें..."
               />
 
               <Button
@@ -431,232 +470,117 @@ export default function AIProductListingPage() {
                 size="lg"
                 icon={<Sparkles className="w-5 h-5" />}
               >
-                {isLoading ? 'AI is understanding your product...' : 'Process Product Info ✨'}
+                {isLoading ? 'उत्पाद की जानकारी समझी जा रही है...' : guidance.processBtn}
               </Button>
             </div>
           </div>
         )}
 
-        {/* STEP 3: Missing Information Questions */}
+        {/* STEP 3: Complete Review & Edit Form ("✨ जानकारी तैयार है") */}
         {step === 3 && (
           <div className="space-y-4 animate-fade-in">
-            <div className="space-y-1 text-center">
-              <h2 className="font-headline font-extrabold text-xl text-[#2e3230]">
-                Additional Details Needed
-              </h2>
-              <p className="font-label text-xs text-[#6b6358]">
-                AI requires a few more missing required fields.
-              </p>
-            </div>
-
-            {/* Current Extraction Card */}
-            <div className="bg-[#faf6f0] p-4 rounded-2xl border border-[#c4c8bc]/30 space-y-2 text-xs font-body">
-              <span className="font-label font-bold text-[#4a7c59] uppercase tracking-wider text-[10px] block">
-                Extracted Information
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {productSchema.product_name && (
-                  <span className="bg-white px-2.5 py-1 rounded-lg border border-[#c4c8bc]/30">
-                    Name: <strong>{productSchema.product_name}</strong>
-                  </span>
-                )}
-                {productSchema.category && (
-                  <span className="bg-white px-2.5 py-1 rounded-lg border border-[#c4c8bc]/30">
-                    Category: <strong>{productSchema.category}</strong>
-                  </span>
-                )}
-                {productSchema.price && (
-                  <span className="bg-white px-2.5 py-1 rounded-lg border border-[#c4c8bc]/30">
-                    Price: <strong>₹{productSchema.price}</strong>
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Single Missing Question Box */}
-            {currentNextQuestion && (
-              <div className="bg-white p-5 rounded-3xl border border-[#4a7c59]/40 soft-shadow space-y-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-[#d8f0de] text-[#4a7c59] flex items-center justify-center text-xl shrink-0">
-                    <HelpCircle className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <span className="font-label text-[10px] font-bold text-[#6b6358] uppercase">
-                      Missing Question
-                    </span>
-                    <h3 className="font-headline font-bold text-base text-[#2e3230] leading-snug">
-                      {currentNextQuestion}
-                    </h3>
-                  </div>
-                </div>
-
-                <div className="space-y-3 pt-1">
-                  <Input
-                    placeholder="Apna jawab yahan likhein..."
-                    value={missingAnswerInput}
-                    onChange={(e) => setMissingAnswerInput(e.target.value)}
-                  />
-
-                  <Button
-                    onClick={() => handleMissingAnswerSubmit(missingAnswerInput)}
-                    disabled={isLoading || !missingAnswerInput.trim()}
-                    fullWidth
-                    size="md"
-                    icon={<Check className="w-4 h-4" />}
-                  >
-                    {isLoading ? 'Updating...' : 'Submit Answer'}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* STEP 4: Product Preview & Editing */}
-        {step === 4 && (
-          <div className="space-y-4 animate-fade-in">
             <div className="text-center space-y-1">
-              <div className="w-12 h-12 rounded-full bg-[#c8e8d0] text-[#4a7c59] flex items-center justify-center mx-auto text-xl">
-                <CheckCircle2 className="w-7 h-7" />
+              <div className="w-12 h-12 rounded-full bg-[#c8e8d0] text-[#4a7c59] flex items-center justify-center mx-auto text-xl soft-shadow">
+                <CheckCircle2 className="w-7 h-7 text-[#4a7c59]" />
               </div>
               <h2 className="font-headline font-extrabold text-2xl text-[#2e3230]">
-                Your Product Listing
+                ✨ जानकारी तैयार है
               </h2>
               <p className="font-label text-xs text-[#6b6358]">
-                Please review details before saving to database.
+                नीचे अपने उत्पाद की जानकारी जाँचें और ज़रूरत हो तो बदलाव करें।
               </p>
             </div>
 
-            {/* Confirmation & Editing Card */}
+            {/* Editable Form Card */}
             <div className="bg-white rounded-3xl p-5 soft-shadow border border-[#c4c8bc]/40 space-y-4">
               {photoUrl && (
-                <div className="h-48 rounded-2xl overflow-hidden bg-[#f0ece4]">
+                <div className="h-44 rounded-2xl overflow-hidden bg-[#f0ece4]">
                   <img src={photoUrl} alt="Product" className="w-full h-full object-cover" />
                 </div>
               )}
 
-              {!isEditing ? (
-                /* Static Readonly Preview */
-                <div className="bg-[#faf6f0] rounded-2xl p-4 border border-[#c4c8bc]/30 space-y-3 text-sm font-body">
-                  <div className="flex justify-between border-b border-[#c4c8bc]/20 pb-2">
-                    <span className="font-label text-xs text-[#6b6358]">Product Name:</span>
-                    <span className="font-headline font-bold text-[#2e3230]">{productSchema.product_name}</span>
-                  </div>
+              <div className="space-y-3.5">
+                <Input
+                  label="नाम *"
+                  placeholder="जैसे: Banarasi Silk Saree"
+                  value={productSchema.product_name || ''}
+                  onChange={(e) => setProductSchema({ ...productSchema, product_name: e.target.value })}
+                />
 
-                  <div className="flex justify-between border-b border-[#c4c8bc]/20 pb-2">
-                    <span className="font-label text-xs text-[#6b6358]">Category:</span>
-                    <span className="font-semibold text-[#2e3230]">{productSchema.category}</span>
-                  </div>
+                <Input
+                  label="श्रेणी *"
+                  placeholder="जैसे: Saree, Pottery, Woodwork"
+                  value={productSchema.category || ''}
+                  onChange={(e) => setProductSchema({ ...productSchema, category: e.target.value })}
+                />
 
-                  <div className="flex justify-between border-b border-[#c4c8bc]/20 pb-2">
-                    <span className="font-label text-xs text-[#6b6358]">Craft Type:</span>
-                    <span className="font-semibold text-[#2e3230]">{productSchema.craft_type}</span>
-                  </div>
+                <Input
+                  label="शिल्प / कला"
+                  placeholder="जैसे: Handloom Weaving (वैकल्पिक)"
+                  value={productSchema.craft_type || ''}
+                  onChange={(e) => setProductSchema({ ...productSchema, craft_type: e.target.value })}
+                />
 
-                  <div className="flex justify-between border-b border-[#c4c8bc]/20 pb-2">
-                    <span className="font-label text-xs text-[#6b6358]">Material:</span>
-                    <span className="font-semibold text-[#2e3230]">{productSchema.material}</span>
-                  </div>
+                <Input
+                  label="सामग्री"
+                  placeholder="जैसे: Pure Silk, Cotton, Wood (वैकल्पिक)"
+                  value={productSchema.material || ''}
+                  onChange={(e) => setProductSchema({ ...productSchema, material: e.target.value })}
+                />
 
-                  <div className="flex justify-between border-b border-[#c4c8bc]/20 pb-2">
-                    <span className="font-label text-xs text-[#6b6358]">Price:</span>
-                    <span className="font-headline font-extrabold text-[#4a7c59] text-base">₹{productSchema.price}</span>
-                  </div>
-
-                  <div className="flex justify-between border-b border-[#c4c8bc]/20 pb-2">
-                    <span className="font-label text-xs text-[#6b6358]">Available Quantity:</span>
-                    <span className="font-semibold text-[#2e3230]">{productSchema.quantity} pieces</span>
-                  </div>
-
-                  {productSchema.production_time_days && (
-                    <div className="flex justify-between border-b border-[#c4c8bc]/20 pb-2">
-                      <span className="font-label text-xs text-[#6b6358]">Production Time:</span>
-                      <span className="font-semibold text-[#2e3230]">{productSchema.production_time_days} days</span>
-                    </div>
-                  )}
-
-                  <div className="pt-1">
-                    <span className="font-label text-xs text-[#6b6358] block mb-1">Description:</span>
-                    <p className="text-xs text-[#4a4e4a] bg-white p-3 rounded-xl border border-[#c4c8bc]/30 leading-relaxed">
-                      {englishDescription || productSchema.description}
-                    </p>
-                  </div>
+                <div className="space-y-1">
+                  <label className="block font-label text-xs font-semibold text-[#4a4e4a]">
+                    विवरण
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={englishDescription || productSchema.description || originalDescription}
+                    onChange={(e) => {
+                      setEnglishDescription(e.target.value);
+                      setProductSchema({ ...productSchema, description: e.target.value });
+                    }}
+                    placeholder="उत्पाद का पूरा विवरण..."
+                    className="w-full bg-[#faf6f0] border border-[#c4c8bc]/50 rounded-2xl p-3.5 text-xs text-[#2e3230] font-body focus:ring-2 focus:ring-[#4a7c59] focus:outline-none"
+                  />
                 </div>
-              ) : (
-                /* Inline Editing Form */
-                <div className="space-y-3 bg-[#faf6f0] p-4 rounded-2xl border border-[#4a7c59]/40 text-xs font-body">
-                  <Input
-                    label="Product Name"
-                    value={productSchema.product_name || ''}
-                    onChange={(e) => setProductSchema({ ...productSchema, product_name: e.target.value })}
-                  />
 
-                  <Input
-                    label="Category"
-                    value={productSchema.category || ''}
-                    onChange={(e) => setProductSchema({ ...productSchema, category: e.target.value })}
-                  />
+                <Input
+                  label="रंग / Availability"
+                  placeholder="जैसे: Multiple colours (वैकल्पिक)"
+                  value={productSchema.color || ''}
+                  onChange={(e) => setProductSchema({ ...productSchema, color: e.target.value })}
+                />
 
+                <div className="grid grid-cols-2 gap-3">
                   <Input
-                    label="Craft Type"
-                    value={productSchema.craft_type || ''}
-                    onChange={(e) => setProductSchema({ ...productSchema, craft_type: e.target.value })}
-                  />
-
-                  <Input
-                    label="Material"
-                    value={productSchema.material || ''}
-                    onChange={(e) => setProductSchema({ ...productSchema, material: e.target.value })}
-                  />
-
-                  <Input
-                    label="Price (₹)"
+                    label="कीमत (₹) *"
                     type="number"
-                    value={productSchema.price || ''}
-                    onChange={(e) => setProductSchema({ ...productSchema, price: parseInt(e.target.value, 10) || 0 })}
+                    placeholder="2500"
+                    value={productSchema.price !== null && productSchema.price !== undefined ? String(productSchema.price) : ''}
+                    onChange={(e) => setProductSchema({ ...productSchema, price: e.target.value ? parseInt(e.target.value, 10) : null })}
                   />
 
                   <Input
-                    label="Available Quantity"
+                    label="मात्रा *"
                     type="number"
-                    value={productSchema.quantity || ''}
-                    onChange={(e) => setProductSchema({ ...productSchema, quantity: parseInt(e.target.value, 10) || 0 })}
+                    placeholder="5"
+                    value={productSchema.quantity !== null && productSchema.quantity !== undefined ? String(productSchema.quantity) : ''}
+                    onChange={(e) => setProductSchema({ ...productSchema, quantity: e.target.value ? parseInt(e.target.value, 10) : null })}
                   />
-
-                  <Button
-                    onClick={() => setIsEditing(false)}
-                    variant="secondary"
-                    fullWidth
-                    size="sm"
-                    icon={<Check className="w-4 h-4" />}
-                  >
-                    Done Editing
-                  </Button>
                 </div>
-              )}
+              </div>
 
-              {/* Action Buttons */}
-              <div className="space-y-2.5 pt-1">
+              {/* Confirm & Save Button */}
+              <div className="pt-3">
                 <Button
                   onClick={handleConfirmAndSave}
-                  disabled={isLoading}
+                  disabled={isLoading || !productSchema.product_name || productSchema.price === null}
                   fullWidth
                   size="lg"
                   icon={<Sparkles className="w-5 h-5" />}
                 >
-                  {isLoading ? 'Saving to Database...' : 'Confirm & Save'}
+                  {isLoading ? 'डेटाबेस में सेव हो रहा है...' : 'Confirm & Save (सेव करें) ✨'}
                 </Button>
-
-                {!isEditing && (
-                  <button
-                    type="button"
-                    onClick={() => setIsEditing(true)}
-                    className="w-full text-center font-label text-xs font-bold text-[#6b6358] hover:text-[#4a7c59] py-2 flex items-center justify-center gap-1.5"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                    <span>Edit Information</span>
-                  </button>
-                )}
               </div>
             </div>
           </div>

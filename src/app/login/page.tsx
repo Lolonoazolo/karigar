@@ -8,8 +8,8 @@ import { useLanguage } from '@/context/LanguageContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Toast } from '@/components/ui/Toast';
-import { Phone, Key, ArrowRight, Lock, Sparkles, ArrowLeft, RefreshCw } from 'lucide-react';
-import { sendPhoneOtp, verifyPhoneOtp, normalizePhoneNumber, isValidIndianPhone } from '@/services/authService';
+import { Mail, Lock, Key, ArrowRight, Sparkles, ArrowLeft, Eye, EyeOff, UserPlus } from 'lucide-react';
+import { signInWithEmail } from '@/services/authService';
 import { getProfile, getArtisanProfile } from '@/services/profileService';
 
 export default function LoginPage() {
@@ -17,119 +17,74 @@ export default function LoginPage() {
   const { user, login, toast, showToast } = useArtisan();
   const { t, language } = useLanguage();
 
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [step, setStep] = useState<'phone' | 'otp'>('phone');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [resendTimer, setResendTimer] = useState(0);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   useEffect(() => {
     if (user) {
-      router.replace('/profile');
+      router.replace('/artisan/products');
     }
   }, [user, router]);
 
-  // Resend Countdown Timer
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (resendTimer > 0) {
-      timer = setInterval(() => {
-        setResendTimer((prev) => prev - 1);
-      }, 1000);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [resendTimer]);
-
-  const handleSendOtp = async (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
 
-    const normalized = normalizePhoneNumber(phone);
-    if (!isValidIndianPhone(normalized)) {
-      setErrors({ phone: 'Kripya 10-digit ka sahi Indian mobile number bharein.' });
-      showToast('Kripya 10-digit ka sahi Indian mobile number bharein.');
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setErrors({ email: 'कृपया सही ईमेल दर्ज करें।' });
+      showToast('कृपया सही ईमेल दर्ज करें।');
+      return;
+    }
+
+    if (!password) {
+      setErrors({ password: 'कृपया अपना पासवर्ड दर्ज करें।' });
+      showToast('कृपया अपना पासवर्ड दर्ज करें।');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await sendPhoneOtp(phone);
-      setStep('otp');
-      setResendTimer(30);
-      showToast(`SMS OTP +91 ${phone.slice(-10)} par bhej diya gaya hai.`);
-    } catch (err: any) {
-      showToast(err.message || 'OTP bhejane mein samasya aayi.');
-      setErrors({ phone: err.message || 'OTP bhejane mein samasya aayi.' });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleResendOtp = async () => {
-    if (resendTimer > 0) return;
-    setErrors({});
-    setIsSubmitting(true);
-    try {
-      await sendPhoneOtp(phone);
-      setResendTimer(30);
-      showToast('Naya OTP code bhej diya gaya hai.');
-    } catch (err: any) {
-      showToast(err.message || 'OTP resend karne mein samasya aayi.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrors({});
-
-    if (!otp.trim() || otp.trim().length < 6) {
-      setErrors({ otp: 'Kripya 6-digit ka sahi OTP code bharein.' });
-      showToast('Kripya 6-digit ka OTP code bharein.');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const res = await verifyPhoneOtp(phone, otp.trim());
+      // 1. Authenticate against REAL Supabase Auth
+      const res = await signInWithEmail(cleanEmail, password);
       const sbUser = res.user;
 
       if (!sbUser) {
         throw new Error('Authentication failed. User not returned.');
       }
 
-      // Check if artisan profile exists in database
-      const profile = await getProfile(sbUser.id);
+      // 2. Query public.artisans using sbUser.id
       const artisan = await getArtisanProfile(sbUser.id);
 
-      const hasExistingProfile = Boolean(profile?.full_name || artisan?.craft_type);
+      const hasExistingProfile = Boolean(artisan?.craft_type || artisan?.location || artisan?.bio || sbUser.user_metadata?.full_name);
 
+      // 3. Sync ArtisanContext Session
       await login({
         id: sbUser.id,
-        email: sbUser.email || '',
-        mobile: normalizePhoneNumber(phone),
-        name: profile?.full_name || sbUser.user_metadata?.full_name || '',
-        shop: profile?.craft || artisan?.craft_type || '',
-        craft: profile?.craft || artisan?.craft_type || '',
-        location: profile?.location || artisan?.location || '',
-        lang: profile?.preferred_language || language,
-        bio: profile?.bio || artisan?.bio || '',
+        email: sbUser.email || cleanEmail,
+        mobile: artisan?.phone || sbUser.user_metadata?.mobile || '',
+        name: artisan?.name || artisan?.nam || sbUser.user_metadata?.full_name || '',
+        shop: artisan?.craft_type || artisan?.shop || '',
+        craft: artisan?.craft_type || artisan?.craft || '',
+        location: artisan?.location || '',
+        lang: artisan?.language || language,
+        bio: artisan?.bio || '',
+        artisanId: sbUser.id,
       });
 
       if (hasExistingProfile) {
-        showToast('Login safal raha!');
-        router.replace('/profile');
+        showToast('लॉग इन सफल रहा!');
+        router.replace('/artisan/products');
       } else {
-        showToast('Naya account detected! Kripya apna profile setup karein.');
+        showToast('नया खाता! कृपया अपना प्रोफ़ाइल सेटअप करें।');
         router.replace('/onboarding/profile');
       }
     } catch (err: any) {
-      showToast(err.message || 'OTP verification fail ho gaya.');
-      setErrors({ otp: err.message || 'OTP code galat hai.' });
+      showToast(err.message || 'लॉग इन करने में समस्या आई।');
+      setErrors({ email: err.message || 'ईमेल या पासवर्ड सही नहीं है।' });
     } finally {
       setIsSubmitting(false);
     }
@@ -139,135 +94,137 @@ export default function LoginPage() {
     <MobilePage hasBottomNav={false}>
       <Toast message={toast.message} visible={toast.visible} />
 
+      {/* Header */}
       <header className="px-5 py-4 flex items-center justify-between border-b border-[#c4c8bc]/30 sticky top-0 bg-[#faf6f0] z-20">
-        {step === 'otp' ? (
-          <button
-            onClick={() => {
-              setStep('phone');
-              setOtp('');
-              setErrors({});
-            }}
-            className="p-1.5 -ml-1 rounded-full hover:bg-[#f0ece4] transition-colors text-[#2e3230] flex items-center gap-1 font-label text-xs font-bold"
-          >
-            <ArrowLeft className="w-4 h-4 rtl-flip" />
-            <span>Change Number</span>
-          </button>
-        ) : (
-          <span className="font-headline font-bold text-[#4a7c59] text-base">
-            ArtSathi Phone Login
-          </span>
-        )}
+        <button
+          onClick={() => router.push('/onboarding/profile')}
+          className="p-2 -ml-2 rounded-full hover:bg-[#f0ece4] transition-colors text-[#2e3230]"
+          aria-label={t('accessibility.back')}
+        >
+          <ArrowLeft className="w-5 h-5 rtl-flip" />
+        </button>
+        <span className="font-headline font-bold text-[#4a7c59] text-base">
+          KarigarAI लॉग इन
+        </span>
         <Sparkles className="w-5 h-5 text-[#4a7c59]" />
       </header>
 
-      <main className="flex-1 flex flex-col px-5 py-6 space-y-6">
+      <main className="flex-1 flex flex-col px-5 py-6 space-y-5">
+        {/* TWO PATH SWITCHER TABS */}
+        <div className="flex items-center p-1.5 bg-[#eae6de] rounded-2xl border border-[#c4c8bc]/40">
+          <button
+            type="button"
+            onClick={() => router.push('/onboarding/profile')}
+            className="flex-1 py-2.5 px-3 text-xs font-headline font-semibold rounded-xl transition-all text-[#6b6358] hover:text-[#2e3230] hover:bg-[#faf6f0]/60 flex items-center justify-center gap-1.5"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            <span>नया खाता बनाएँ</span>
+          </button>
+          <button
+            type="button"
+            className="flex-1 py-2.5 px-3 text-xs font-headline font-bold rounded-xl transition-all bg-[#4a7c59] text-white soft-shadow flex items-center justify-center gap-1.5"
+          >
+            <span>🔑 लॉग इन करें</span>
+          </button>
+        </div>
+
         {/* Header Graphic & Title */}
-        <div className="text-center space-y-2 pt-2">
+        <div className="text-center space-y-2 pt-1">
           <div className="w-16 h-16 rounded-full bg-[#c8e8d0] text-[#4a7c59] flex items-center justify-center mx-auto text-3xl soft-shadow border border-[#4a7c59]/20">
             🏺
           </div>
           <h1 className="font-headline font-extrabold text-2xl text-[#2e3230]">
-            {step === 'phone' ? 'Namaste Karigar!' : 'Verify Mobile OTP'}
+            फिर से स्वागत है 👋
           </h1>
           <p className="font-label text-xs text-[#6b6358] max-w-xs mx-auto">
-            {step === 'phone'
-              ? 'Aapka mobile number hi aapka ArtSathi login hai.'
-              : `Humne +91 ${phone.slice(-10)} par 6-digit SMS code bheja hai.`}
+            अपने KarigarAI खाते में लॉग इन करें
           </p>
         </div>
 
-        {/* STEP 1: Phone Form */}
-        {step === 'phone' && (
-          <form onSubmit={handleSendOtp} className="space-y-4 bg-white p-5 rounded-2xl soft-shadow border border-[#c4c8bc]/30">
+        {/* EMAIL & PASSWORD LOGIN FORM */}
+        <form onSubmit={handleLoginSubmit} className="space-y-4 bg-white p-5 rounded-2xl soft-shadow border border-[#c4c8bc]/30">
+          <Input
+            label="ईमेल *"
+            type="email"
+            placeholder="अपना ईमेल दर्ज करें"
+            leftIcon={<Mail className="w-5 h-5 text-[#74796e]" />}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            error={errors.email}
+            required
+          />
+
+          <div className="relative">
             <Input
-              label="Mobile Number"
-              type="tel"
-              placeholder="98765 43210"
-              prefixText="🇮🇳 +91"
-              leftIcon={<Phone className="w-5 h-5 text-[#74796e]" />}
-              value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, '').slice(0, 10))}
-              error={errors.phone}
-              maxLength={10}
+              label="पासवर्ड *"
+              type={showPassword ? 'text' : 'password'}
+              placeholder="••••••••"
+              leftIcon={<Lock className="w-5 h-5 text-[#74796e]" />}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              error={errors.password}
               required
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-[38px] text-[#74796e] hover:text-[#2e3230]"
+              aria-label="Toggle password visibility"
+            >
+              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            </button>
+          </div>
 
-            <div className="pt-2">
-              <Button
-                type="submit"
-                fullWidth
-                size="lg"
-                disabled={isSubmitting || phone.length < 10}
-                icon={<ArrowRight className="w-5 h-5 rtl-flip" />}
-              >
-                {isSubmitting ? 'Sending OTP SMS...' : 'Send OTP Code'}
-              </Button>
-            </div>
-          </form>
-        )}
+          <div className="flex items-center justify-end pt-1">
+            <button
+              type="button"
+              onClick={() => router.push('/forgot-password')}
+              className="text-xs font-label font-bold text-[#4a7c59] hover:underline"
+            >
+              पासवर्ड भूल गए?
+            </button>
+          </div>
 
-        {/* STEP 2: OTP Form */}
-        {step === 'otp' && (
-          <form onSubmit={handleVerifyOtp} className="space-y-4 bg-white p-5 rounded-2xl soft-shadow border border-[#c4c8bc]/30">
-            <Input
-              label="6-Digit OTP Code"
-              type="text"
-              placeholder="••••••"
-              leftIcon={<Key className="w-5 h-5 text-[#74796e]" />}
-              value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/[^\d]/g, '').slice(0, 6))}
-              error={errors.otp}
-              maxLength={6}
-              required
-            />
+          <div className="pt-2">
+            <Button
+              type="submit"
+              fullWidth
+              size="lg"
+              disabled={isSubmitting || !email.trim() || !password}
+              icon={<ArrowRight className="w-5 h-5 rtl-flip" />}
+            >
+              {isSubmitting ? 'लॉग इन हो रहा है...' : 'लॉग इन करें →'}
+            </Button>
+          </div>
+        </form>
 
-            <div className="pt-2 space-y-3">
-              <Button
-                type="submit"
-                fullWidth
-                size="lg"
-                disabled={isSubmitting || otp.length < 6}
-                icon={<ArrowRight className="w-5 h-5 rtl-flip" />}
-              >
-                {isSubmitting ? 'Verifying OTP...' : 'Verify & Sign In'}
-              </Button>
-
-              <div className="flex items-center justify-between text-xs font-label pt-2">
-                <button
-                  type="button"
-                  onClick={handleResendOtp}
-                  disabled={resendTimer > 0 || isSubmitting}
-                  className={`flex items-center gap-1 font-bold ${
-                    resendTimer > 0 ? 'text-[#6b6358] cursor-not-allowed' : 'text-[#4a7c59] hover:underline'
-                  }`}
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isSubmitting ? 'animate-spin' : ''}`} />
-                  <span>
-                    {resendTimer > 0 ? `Resend code in ${resendTimer}s` : 'Resend OTP Code'}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStep('phone');
-                    setOtp('');
-                    setErrors({});
-                  }}
-                  className="text-[#6b6358] hover:text-[#2e3230] underline"
-                >
-                  Change Number
-                </button>
-              </div>
-            </div>
-          </form>
-        )}
+        {/* PATH 1 ALTERNATIVE CARD: NEW ACCOUNT */}
+        <div className="bg-white p-4 rounded-2xl border border-[#c4c8bc]/40 text-center space-y-3 soft-shadow">
+          <div className="space-y-1">
+            <p className="font-headline font-bold text-sm text-[#2e3230]">
+              नया खाता बनाना है?
+            </p>
+            <p className="font-label text-xs text-[#6b6358]">
+              यदि आपका खाता नहीं बना है, तो नया खाता बनाएँ।
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            fullWidth
+            size="md"
+            icon={<UserPlus className="w-4 h-4" />}
+            onClick={() => router.push('/onboarding/profile')}
+          >
+            ✨ नया खाता बनाएँ
+          </Button>
+        </div>
 
         {/* Footer Security Badge */}
-        <div className="text-center pt-2">
+        <div className="text-center pt-1 pb-4">
           <p className="font-label text-xs text-[#6b6358] flex items-center justify-center gap-1.5">
             <Lock className="w-3.5 h-3.5 text-[#4a7c59]" />
-            <span>Supabase Phone SMS Authentication</span>
+            <span>सुरक्षित एवं निजी | Supabase Auth Email Encryption</span>
           </p>
         </div>
       </main>

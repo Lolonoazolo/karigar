@@ -1,40 +1,36 @@
 import { supabaseClient, isSupabaseConfigured } from '@/lib/supabase/client';
 import { ArtisanUser } from '@/types';
 
+/**
+ * Fetches artisan profile from public.artisans using the authenticated user ID.
+ */
 export async function getProfile(userId: string) {
-  if (!isSupabaseConfigured || !supabaseClient) return null;
-
-  const { data, error } = await supabaseClient
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single();
-
-  if (error && error.code !== 'PGRST116') {
-    console.error('Error fetching profile:', error.message);
-    throw error;
-  }
-
-  return data;
-}
-
-export async function getArtisanProfile(profileId: string) {
-  if (!isSupabaseConfigured || !supabaseClient) return null;
+  if (!isSupabaseConfigured || !supabaseClient || !userId) return null;
 
   const { data, error } = await supabaseClient
     .from('artisans')
     .select('*')
-    .eq('profile_id', profileId)
+    .eq('id', userId)
     .maybeSingle();
 
   if (error) {
-    console.error('Error fetching artisan profile:', error.message);
-    throw error;
+    console.warn('Notice: Error fetching artisan profile:', error.message);
+    return null;
   }
 
   return data;
 }
 
+/**
+ * Alias helper fetching artisan record from public.artisans table.
+ */
+export async function getArtisanProfile(profileId: string) {
+  return getProfile(profileId);
+}
+
+/**
+ * Upserts artisan profile data strictly into public.artisans table using user id.
+ */
 export async function updateArtisanFullProfile(
   userId: string,
   updates: {
@@ -50,50 +46,34 @@ export async function updateArtisanFullProfile(
     return null;
   }
 
-  // 1. Upsert Profiles table
-  const profileUpdates: Record<string, any> = {
+  // Build upsert payload for public.artisans table using id = userId
+  const artisanUpdates: Record<string, any> = {
     id: userId,
     updated_at: new Date().toISOString(),
   };
-  if (updates.name !== undefined) profileUpdates.full_name = updates.name;
-  if (updates.avatarUrl !== undefined) profileUpdates.avatar_url = updates.avatarUrl;
-  if (updates.craft !== undefined) profileUpdates.craft = updates.craft;
-  if (updates.location !== undefined) profileUpdates.location = updates.location;
-  if (updates.bio !== undefined) profileUpdates.bio = updates.bio;
-  if (updates.mobile !== undefined) profileUpdates.phone = updates.mobile;
 
-  const { error: profileError } = await supabaseClient
-    .from('profiles')
-    .upsert(profileUpdates, { onConflict: 'id' });
-
-  if (profileError) {
-    console.error('Failed to update profile:', profileError.message);
-    throw profileError;
-  }
-
-  // 2. Upsert Artisans table
-  const artisanUpdates: Record<string, any> = {
-    profile_id: userId,
-    updated_at: new Date().toISOString(),
-  };
   if (updates.craft !== undefined) artisanUpdates.craft_type = updates.craft;
   if (updates.location !== undefined) artisanUpdates.location = updates.location;
   if (updates.bio !== undefined) artisanUpdates.bio = updates.bio;
 
+  // Perform Upsert on public.artisans
   const { data: artisanData, error: artisanError } = await supabaseClient
     .from('artisans')
-    .upsert(artisanUpdates, { onConflict: 'profile_id' })
+    .upsert(artisanUpdates, { onConflict: 'id' })
     .select()
     .single();
 
   if (artisanError) {
-    console.error('Failed to upsert artisan details:', artisanError.message);
+    console.error('Failed to upsert artisan details into public.artisans:', artisanError.message);
     throw artisanError;
   }
 
   return artisanData;
 }
 
+/**
+ * Helper to upsert ArtisanUser data into public.artisans.
+ */
 export async function upsertArtisanProfileData(artisanUser: ArtisanUser) {
   if (!isSupabaseConfigured || !supabaseClient || !artisanUser.id) {
     return null;
@@ -109,6 +89,9 @@ export async function upsertArtisanProfileData(artisanUser: ArtisanUser) {
   });
 }
 
+/**
+ * Uploads artisan avatar image to Supabase Storage.
+ */
 export async function uploadAvatar(userId: string, fileOrBlob: File | Blob, fileExt: string = 'png'): Promise<string | null> {
   if (!isSupabaseConfigured || !supabaseClient) return null;
 
